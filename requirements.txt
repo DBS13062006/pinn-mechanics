@@ -1,0 +1,12 @@
+# PyTorch is deliberately NOT listed here. On Windows, a plain `pip install torch`
+# gives a CPU-only build. Install it first with the CUDA command from
+# https://pytorch.org/get-started/locally/  (Google Colab already has it).
+numpy>=1.26
+scipy>=1.11
+matplotlib>=3.8
+pandas>=2.1
+tqdm>=4.66
+
+# Install this repo itself in editable mode, so `from pinn.utils import ...`
+# works from scripts, notebooks and Colab without path hacks.
+-e .
