@@ -78,8 +78,8 @@ class Trainer:
         config:  TrainConfig.
         eval_fn: optional, returns {metric name: float}. Called every
                  config.eval_every iterations and at the end of each phase.
-                 Runs without gradient tracking for speed, so it must not
-                 call grad(); compute derivatives in loss_fn instead.
+                 Runs without gradient tracking for speed; a metric that
+                 needs derivatives must wrap that part in torch.enable_grad().
         hooks:   optional callables run after every ADAM step, e.g. to
                  resample collocation points (Step 7). Not run during L-BFGS:
                  changing the points would invalidate the curvature history

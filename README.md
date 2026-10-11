@@ -16,7 +16,7 @@ UE24CS352A Machine Learning mini-project.
 |---|---|---|
 | 1 | Environment and repo skeleton | done |
 | 2 | PINN engine (network, autograd helpers, Adam -> L-BFGS trainer) | done |
-| 3 | Reproduce 4.3: damped oscillator, find c and k | |
+| 3 | Reproduce 4.3: damped oscillator, find c and k (5 seeds) + diagnose slow c | done |
 | 4 | Reproduce 4.1: Terzaghi consolidation | |
 | 5 | Reproduce 4.2: steady heat conduction | |
 | 6 | Improvement 1: exact boundary conditions | |
@@ -65,7 +65,13 @@ token = userdata.get("GH_TOKEN")
 python -m pytest                              :: engine unit tests, ~15 s
 python experiments/step2_engine_check.py      :: engine check on the heat equation, a few min on GPU
 python experiments/step2_engine_check.py --quick   :: smaller version for a CPU
+
+python experiments/step3_oscillator.py --bench      :: time CPU vs GPU for this tiny problem
+python experiments/step3_oscillator.py --device cuda             :: 3 configs x 5 seeds
+python experiments/step3_oscillator.py --device cpu --jobs 5     :: same, 5 runs in parallel on CPU
 ```
+
+Results so far: [Step 3 summary table](results/tables/step3_oscillator_summary.md).
 
 Every experiment writes its raw output (loss history, model weights, metrics.json) to a new
 `results/runs/<timestamp>_<name>/` folder, and its report figure to `results/figures/`.
@@ -81,6 +87,7 @@ pinn/          reusable PINN engine
   plotting.py    shared figure style (colorblind-checked palette)
   utils.py       seeding, device and float64 setup, timing, run folders
 problems/      one module per physics problem: residual, boundary conditions, reference solution
+  oscillator.py  paper 4.3: exact solution, ODE residual, implied-parameter diagnostic
 experiments/   runnable scripts that produce every number and figure in the report
 tests/         fast unit tests for the engine (pytest)
 scripts/       helper scripts (environment check)

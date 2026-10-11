@@ -40,6 +40,12 @@ class MLP(nn.Module):
         lb, ub:  lower / upper bound of each input coordinate. Used to scale
                  inputs to [-1, 1]. Defaults to [0, 1] for every coordinate.
         activation: activation class (default nn.Tanh).
+        init:    "xavier_normal" (Glorot normal, default) or "xavier_uniform"
+                 (Glorot uniform). The paper uses normal for 4.1 and uniform
+                 for 4.2 and 4.3.
+        normalize: scale inputs to [-1, 1] (default True). False feeds raw
+                 coordinates to the first layer; used only to test how much
+                 the scaling matters.
 
     Call it either with one (N, in_dim) tensor, or with one (N, 1) tensor per
     coordinate:  model(t, x)  ==  model(torch.cat([t, x], dim=1)).
@@ -56,8 +62,15 @@ class MLP(nn.Module):
         lb: Sequence[float] | None = None,
         ub: Sequence[float] | None = None,
         activation: type[nn.Module] = nn.Tanh,
+        init: str = "xavier_normal",
+        normalize: bool = True,
     ) -> None:
         super().__init__()
+        inits = {"xavier_normal": nn.init.xavier_normal_,
+                 "xavier_uniform": nn.init.xavier_uniform_}
+        if init not in inits:
+            raise ValueError(f"init must be one of {sorted(inits)}")
+        self.normalize = normalize
         dtype = torch.get_default_dtype()
         lb_t = torch.zeros(in_dim) if lb is None else torch.as_tensor(lb, dtype=dtype)
         ub_t = torch.ones(in_dim) if ub is None else torch.as_tensor(ub, dtype=dtype)
@@ -73,7 +86,7 @@ class MLP(nn.Module):
         layers: list[nn.Module] = []
         for i in range(len(sizes) - 1):
             linear = nn.Linear(sizes[i], sizes[i + 1])
-            nn.init.xavier_normal_(linear.weight)
+            inits[init](linear.weight)
             nn.init.zeros_(linear.bias)
             layers.append(linear)
             if i < len(sizes) - 2:  # no activation after the output layer
@@ -86,4 +99,6 @@ class MLP(nn.Module):
 
     def forward(self, *inputs: torch.Tensor) -> torch.Tensor:
         x = inputs[0] if len(inputs) == 1 else torch.cat(inputs, dim=1)
-        return self.layers(self.scale_inputs(x))
+        if self.normalize:
+            x = self.scale_inputs(x)
+        return self.layers(x)
