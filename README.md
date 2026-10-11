@@ -15,7 +15,7 @@ UE24CS352A Machine Learning mini-project.
 | Step | Description | Status |
 |---|---|---|
 | 1 | Environment and repo skeleton | done |
-| 2 | PINN engine (network, autograd helpers, Adam -> L-BFGS trainer) | |
+| 2 | PINN engine (network, autograd helpers, Adam -> L-BFGS trainer) | done |
 | 3 | Reproduce 4.3: damped oscillator, find c and k | |
 | 4 | Reproduce 4.1: Terzaghi consolidation | |
 | 5 | Reproduce 4.2: steady heat conduction | |
@@ -59,17 +59,45 @@ token = userdata.get("GH_TOKEN")
 !python scripts/check_env.py
 ```
 
+## Running
+
+```bat
+python -m pytest                              :: engine unit tests, ~15 s
+python experiments/step2_engine_check.py      :: engine check on the heat equation, a few min on GPU
+python experiments/step2_engine_check.py --quick   :: smaller version for a CPU
+```
+
+Every experiment writes its raw output (loss history, model weights, metrics.json) to a new
+`results/runs/<timestamp>_<name>/` folder, and its report figure to `results/figures/`.
+
 ## Repository layout
 
 ```
-pinn/          reusable PINN engine (utils now; model, derivatives, training, sampling later)
+pinn/          reusable PINN engine
+  model.py       fully connected tanh network with input scaling to [-1, 1]
+  derivatives.py grad / nth_grad / laplacian via autograd (derivatives w.r.t. inputs)
+  train.py       Trainer: Adam then L-BFGS, per-term loss logging, eval hooks
+  metrics.py     relative L2 error, max error, parameter error
+  plotting.py    shared figure style (colorblind-checked palette)
+  utils.py       seeding, device and float64 setup, timing, run folders
 problems/      one module per physics problem: residual, boundary conditions, reference solution
 experiments/   runnable scripts that produce every number and figure in the report
+tests/         fast unit tests for the engine (pytest)
 scripts/       helper scripts (environment check)
 notebooks/     demo notebook for the live review
 results/       figures/ and tables/ are committed; runs/ (raw logs) is git-ignored
 report/        write-up (PDF) and slides
 ```
+
+## Design decisions
+
+- **float64 everywhere.** On the RTX 4050 one training step took 12.6 ms in float32 and
+  12.2 ms in float64 (`scripts/check_env.py`): these networks are too small for the slower
+  float64 arithmetic to matter. L-BFGS needs the extra precision near convergence.
+- **Adam, then L-BFGS**, as in the paper. Adam escapes the random start; L-BFGS finishes.
+  If L-BFGS diverges, the trainer restores the last good parameters instead of losing the run.
+- **Every loss term is logged separately**, so a failure can be traced to the PDE, the
+  initial condition, the boundary condition or the data term.
 
 ## Reproducibility
 

@@ -46,13 +46,29 @@ def set_seed(seed: int, deterministic: bool = False) -> None:
 
 
 # --------------------------------------------------------------------------
-# Device and timing
+# Device, precision and timing
 # --------------------------------------------------------------------------
 def get_device(prefer: str = "cuda") -> torch.device:
     """Return the GPU if one is usable, otherwise the CPU."""
     if prefer == "cuda" and torch.cuda.is_available():
         return torch.device("cuda")
     return torch.device("cpu")
+
+
+def setup_torch(dtype: torch.dtype = torch.float64, prefer: str = "cuda") -> torch.device:
+    """Set the project-wide number precision and return the device to use.
+
+    Every experiment calls this first. After it, every new network and tensor
+    is float64 unless stated otherwise.
+
+    Why float64: the step 1 benchmark on the RTX 4050 measured 12.6 ms per
+    training step in float32 and 12.2 ms in float64. With networks this small
+    the GPU spends its time launching many tiny operations, not on arithmetic,
+    so the slower float64 arithmetic is hidden. Extra precision is therefore
+    free, and L-BFGS needs it (see pinn/train.py).
+    """
+    torch.set_default_dtype(dtype)
+    return get_device(prefer)
 
 
 @contextmanager

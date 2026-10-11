@@ -6,6 +6,7 @@ scipy>=1.11
 matplotlib>=3.8
 pandas>=2.1
 tqdm>=4.66
+pytest>=8.0
 
 # Install this repo itself in editable mode, so `from pinn.utils import ...`
 # works from scripts, notebooks and Colab without path hacks.

@@ -10,3 +10,6 @@ requires-python = ">=3.10"
 
 [tool.setuptools]
 packages = ["pinn", "problems"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
