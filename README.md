@@ -17,6 +17,7 @@ UE24CS352A Machine Learning mini-project.
 | 1 | Environment and repo skeleton | done |
 | 2 | PINN engine (network, autograd helpers, Adam -> L-BFGS trainer) | done |
 | 3 | Reproduce 4.3: damped oscillator, find c and k (5 seeds) + diagnose slow c | done |
+| 3b | Improvement: two-stage warm start makes discovery of c reliable and fast | done |
 | 4 | Reproduce 4.1: Terzaghi consolidation | |
 | 5 | Reproduce 4.2: steady heat conduction | |
 | 6 | Improvement 1: exact boundary conditions | |
@@ -69,9 +70,23 @@ python experiments/step2_engine_check.py --quick   :: smaller version for a CPU
 python experiments/step3_oscillator.py --bench      :: time CPU vs GPU for this tiny problem
 python experiments/step3_oscillator.py --device cuda             :: 3 configs x 5 seeds
 python experiments/step3_oscillator.py --device cpu --jobs 5     :: same, 5 runs in parallel on CPU
+python experiments/step3b_oscillator_fix.py --device cpu --jobs 5 :: the fix + ablations, 10 seeds
 ```
 
-Results so far: [Step 3 summary table](results/tables/step3_oscillator_summary.md).
+Results so far:
+[Step 3 summary](results/tables/step3_oscillator_summary.md) ·
+[Step 3b summary](results/tables/step3b_oscillator_fix_summary.md)
+
+## Findings so far
+
+**Oscillator (paper 4.3): why c is found so slowly, and a fix.**
+c and k always match the values implied by the curve the network currently draws
+(`problems/oscillator.py: implied_parameters`). The network learns the signal left to right, and
+the late, small oscillations, which encode the damping c, carry only 1% of the data's energy, while
+a flat tail satisfies the ODE exactly. Early on, c looks like ~1 (heavy damping); with the paper's
+settings, 2 of 5 seeds still miss c by more than 1% after 100k iterations.
+**Fix (two-stage warm start):** fit the data without physics, read c and k off the fitted curve,
+train with physics while c and k are frozen, then release them. See Step 3b for the numbers.
 
 Every experiment writes its raw output (loss history, model weights, metrics.json) to a new
 `results/runs/<timestamp>_<name>/` folder, and its report figure to `results/figures/`.

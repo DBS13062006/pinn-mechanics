@@ -27,3 +27,6 @@ desktop.ini
 
 # Secrets (never commit tokens)
 .env
+
+# Console logs of long experiment runs
+step*_log.txt
