@@ -20,8 +20,8 @@ UE24CS352A Machine Learning mini-project.
 | 3b | Improvement: two-stage warm start makes discovery of c reliable and fast | done |
 | 4 | Reproduce 4.1: Terzaghi consolidation (5 seeds) + locate the error | done |
 | 4b | Improvement: corner-enriched output vs adaptive sampling (RAD) | done |
-| 5 | Reproduce 4.2: steady heat conduction | |
-| 6 | Improvement 1: exact boundary conditions | |
+| 5 | Reproduce 4.2: steady heat conduction (5 seeds) + the paper's suggested hard-BC fix | done |
+| 6 | Improvement 1: exact boundary conditions | done in 5 |
 | 7 | Improvement 2: residual-adaptive sampling | done in 4b |
 | 8 | Improvement 3: noise / sparsity robustness + uncertainty | |
 | 9 | Extras (if time) | |
@@ -74,13 +74,15 @@ python experiments/step3_oscillator.py --device cpu --jobs 5     :: same, 5 runs
 python experiments/step3b_oscillator_fix.py --device cpu --jobs 5 :: the fix + ablations, 10 seeds
 python experiments/step4_consolidation.py --bench                :: then pick cpu --jobs 5 or cuda
 python experiments/step4b_consolidation_fix.py --device cpu --jobs 5 :: the two fixes, 5 seeds
+python experiments/step5_heat.py --bench                         :: then pick cpu --jobs 5 or cuda
 ```
 
 Results so far:
 [Step 3 summary](results/tables/step3_oscillator_summary.md) ·
 [Step 3b summary](results/tables/step3b_oscillator_fix_summary.md) ·
 [Step 4 summary](results/tables/step4_consolidation_summary.md) ·
-[Step 4b summary](results/tables/step4b_consolidation_fix_summary.md)
+[Step 4b summary](results/tables/step4b_consolidation_fix_summary.md) ·
+[Step 5 summary](results/tables/step5_heat_summary.md)
 
 ## Findings so far
 
@@ -111,6 +113,13 @@ This is the paper's own "multiply by x" trick taken one step further. Residual-b
 sampling (RAD) moves points toward the corner but cannot make a smooth network represent an
 infinitely steep front, so it helps far less. See Step 4b for the numbers.
 
+**Heat conduction (paper 4.2): the paper's own suggested fix, tested.** The paper states that no
+analytical solution exists; the classic series solution does (`problems/heat.py`), and our own
+finite-difference solver converges to it at second order. With the boundary condition only as a loss
+penalty (the paper's setup), the largest error sits on the edges and the plate dips slightly below
+zero there. Multiplying the network by (1 - x^2)(1 - y^2), as the paper suggests but never tries, makes
+the edges exact and removes most of the error. See Step 5 for the numbers.
+
 Every experiment writes its raw output (loss history, model weights, metrics.json) to a new
 `results/runs/<timestamp>_<name>/` folder, and its report figure to `results/figures/`.
 
@@ -128,6 +137,7 @@ pinn/          reusable PINN engine
 problems/      one module per physics problem: residual, boundary conditions, reference solution
   oscillator.py  paper 4.3: exact solution, ODE residual, implied-parameter diagnostic
   consolidation.py paper 4.1: two independent exact solutions (Fourier, erfc images), residuals
+  heat.py        paper 4.2: exact series solution (the paper says none exists) + finite-difference check
 experiments/   runnable scripts that produce every number and figure in the report
 tests/         fast unit tests for the engine (pytest)
 scripts/       helper scripts (environment check)
