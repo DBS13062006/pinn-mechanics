@@ -18,7 +18,7 @@ UE24CS352A Machine Learning mini-project.
 | 2 | PINN engine (network, autograd helpers, Adam -> L-BFGS trainer) | done |
 | 3 | Reproduce 4.3: damped oscillator, find c and k (5 seeds) + diagnose slow c | done |
 | 3b | Improvement: two-stage warm start makes discovery of c reliable and fast | done |
-| 4 | Reproduce 4.1: Terzaghi consolidation | |
+| 4 | Reproduce 4.1: Terzaghi consolidation (5 seeds) + locate the error | done |
 | 5 | Reproduce 4.2: steady heat conduction | |
 | 6 | Improvement 1: exact boundary conditions | |
 | 7 | Improvement 2: residual-adaptive sampling | |
@@ -71,11 +71,13 @@ python experiments/step3_oscillator.py --bench      :: time CPU vs GPU for this 
 python experiments/step3_oscillator.py --device cuda             :: 3 configs x 5 seeds
 python experiments/step3_oscillator.py --device cpu --jobs 5     :: same, 5 runs in parallel on CPU
 python experiments/step3b_oscillator_fix.py --device cpu --jobs 5 :: the fix + ablations, 10 seeds
+python experiments/step4_consolidation.py --bench                :: then pick cpu --jobs 5 or cuda
 ```
 
 Results so far:
 [Step 3 summary](results/tables/step3_oscillator_summary.md) ·
-[Step 3b summary](results/tables/step3b_oscillator_fix_summary.md)
+[Step 3b summary](results/tables/step3b_oscillator_fix_summary.md) ·
+[Step 4 summary](results/tables/step4_consolidation_summary.md)
 
 ## Findings so far
 
@@ -86,7 +88,20 @@ the late, small oscillations, which encode the damping c, carry only 1% of the d
 a flat tail satisfies the ODE exactly. Early on, c looks like ~1 (heavy damping); with the paper's
 settings, 2 of 5 seeds still miss c by more than 1% after 100k iterations.
 **Fix (two-stage warm start):** fit the data without physics, read c and k off the fitted curve,
-train with physics while c and k are frozen, then release them. See Step 3b for the numbers.
+then train the full PINN from there (optionally with c and k frozen for a first pass).
+Over 10 seeds it succeeded 10/10, versus 3/5 for the paper's settings, about 30x faster.
+Ablations: the key ingredient is reading c and k off the data-only fit (without it: 7/10);
+freezing c and k first is at most a small safety margin (10/10 without it on one machine,
+9/10 on another). A shortcut of Adam 20k + L-BFGS looked perfect on 5 seeds (5/5) but
+reached only 8/10 on 10, a reminder of why every result here uses several seeds.
+
+**Consolidation (paper 4.1): the training loss hides where the solution is wrong.**
+The exact solution jumps at the corner x = 0, t = 0 (pressure 1 meets the drained top), so the
+PINN's error is concentrated at small times. The first 2% of the time window holds about 11 of the
+500 random collocation points but most of the squared error, and there the PDE residual on fresh
+points is orders of magnitude larger than at the training points. A max error on a uniform grid is
+not meaningful here (it only measures how close the grid gets to the jump), so errors are reported
+as a function of time. See Step 4 for the numbers.
 
 Every experiment writes its raw output (loss history, model weights, metrics.json) to a new
 `results/runs/<timestamp>_<name>/` folder, and its report figure to `results/figures/`.
@@ -103,6 +118,7 @@ pinn/          reusable PINN engine
   utils.py       seeding, device and float64 setup, timing, run folders
 problems/      one module per physics problem: residual, boundary conditions, reference solution
   oscillator.py  paper 4.3: exact solution, ODE residual, implied-parameter diagnostic
+  consolidation.py paper 4.1: two independent exact solutions (Fourier, erfc images), residuals
 experiments/   runnable scripts that produce every number and figure in the report
 tests/         fast unit tests for the engine (pytest)
 scripts/       helper scripts (environment check)
