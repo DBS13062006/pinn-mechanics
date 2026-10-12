@@ -22,8 +22,22 @@ which plays the role of the paper's deal.II solution.
 The paper's PINN uses no output transform, so T = 0 on the edges is only a
 penalty in the loss, and it reports its largest error along the edges. It
 suggests (but does not try) multiplying the network by a distance-like
-function that vanishes on the boundary; pressure_hard() below does exactly
+function that vanishes on the boundary; temperature_hard() below does exactly
 that with d = (1 - x^2)(1 - y^2).
+
+The corners (Step 5b). Along an edge T = 0, so T does not curve along it:
+on the top edge T_xx = 0, and on the right edge T_yy = 0, so the PDE forces
+T_xx = -1 there. At the corner where the two edges meet, T_xx would have to
+be 0 and -1 at once. The exact solution resolves this by making T_xx depend on
+the direction of approach: coming in at angle theta from the horizontal edge,
+T_xx -> -2 theta / pi. A smooth function (any tanh network) has a single value
+at each point, so no network can satisfy both the PDE and T = 0 at a corner:
+  - with soft BC the network gives up a little of T = 0 near the corners, which
+    is where its largest error is;
+  - with hard BC, T = d * N gives T_xx = T_yy = 0 at a corner whatever N is, so
+    the PDE residual there is exactly 1.
+temperature_corner() adds the exact local solution at each corner
+(corner_function) so that the network only has to learn a smooth remainder.
 """
 from __future__ import annotations
 
@@ -92,6 +106,65 @@ def temperature_hard(model, x, y):
     return distance(x, y) * model(x, y)
 
 
+# ------------------------------------------------------------ corners (Step 5b)
+CORNERS = ((1, 1), (-1, 1), (1, -1), (-1, -1))
+CORNER_RADIUS = 0.5             # width of the Gaussian fade-out around each corner term
+
+
+def corner_function(x, y, cx, cy):
+    """Exact solution at the corner (cx, cy), as if its two edges went on forever.
+
+    With xi, eta = distances to the two edges meeting there and r, theta =
+    polar coordinates from the corner (theta = 0 along the horizontal edge):
+
+        u = r^2 [ -1/4 + cos(2 theta)/4 - (ln r sin(2 theta) + theta cos(2 theta)) / pi ]
+
+    Derivation: try u = r^2 g(theta). The PDE gives g'' + 4 g = -1, so
+    g = -1/4 + A cos(2 theta) + B sin(2 theta). u = 0 at theta = 0 needs
+    A = 1/4, but then g(pi/2) = -1/2 and no B can fix it (sin(pi) = 0): this is
+    the corner contradiction again. The way out is the harmonic function
+    r^2 (ln r sin(2 theta) + theta cos(2 theta)) (the imaginary part of
+    z^2 log z), which is 0 at theta = 0 and -pi r^2 / 2 at theta = pi/2; adding
+    -1/pi of it makes u = 0 on both edges. Then u_xx = -2 theta / pi exactly.
+
+    Uses only local information (a 90-degree corner with T = 0 on both sides),
+    not the series solution. numpy arrays or torch tensors. At the corner point
+    itself the value is 0 but the derivatives are undefined.
+    """
+    is_torch = isinstance(x, torch.Tensor)
+    lib = torch if is_torch else np
+    xi, eta = 1 - cx * x, 1 - cy * y
+    r2 = xi**2 + eta**2
+    r2 = r2.clamp_min(1e-300) if is_torch else np.maximum(r2, 1e-300)
+    theta = torch.atan2(eta, xi) if is_torch else np.arctan2(eta, xi)
+    return r2 * (-0.25 + 0.25 * lib.cos(2 * theta)
+                 - (0.5 * lib.log(r2) * lib.sin(2 * theta) + theta * lib.cos(2 * theta)) / math.pi)
+
+
+def corner_terms(x, y, radius: float = CORNER_RADIUS):
+    """Sum of the four corner functions, each kept local.
+
+    weight (1 + cx x)(1 + cy y)/4 is 1 at its own corner and 0 on the two far
+    edges, so T = 0 still holds exactly on every edge. The Gaussian fade-out
+    keeps each term near its corner; without it the four terms add up to more
+    than the temperature itself and the network has to learn a large
+    correction (tried in Step 5b: about 10x worse).
+    """
+    lib = torch if isinstance(x, torch.Tensor) else np
+    out = 0.0
+    for cx, cy in CORNERS:
+        weight = (1 + cx * x) * (1 + cy * y) / 4
+        fade = lib.exp(-((1 - cx * x) ** 2 + (1 - cy * y) ** 2) / radius**2)
+        out = out + weight * fade * corner_function(x, y, cx, cy)
+    return out
+
+
+def temperature_corner(model, x, y):
+    """Step 5b: T = d * network + corner terms. T = 0 on the edges exactly, and
+    the corner behaviour no smooth network can produce is built in."""
+    return temperature_hard(model, x, y) + corner_terms(x, y)
+
+
 def pde_residual(model, x, y, output=temperature_soft):
     """T_xx + T_yy + 1. Zero wherever the heat equation holds."""
     T = output(model, x, y)
@@ -125,3 +198,23 @@ def test_grid(n: int = 201, device=None):
 def distance_to_boundary(x, y):
     """Euclidean distance to the nearest edge of the square."""
     return np.minimum(1 - np.abs(x), 1 - np.abs(y))
+
+
+def distance_to_corner(x, y):
+    """Euclidean distance to the nearest of the four corners."""
+    return np.sqrt((1 - np.abs(x)) ** 2 + (1 - np.abs(y)) ** 2)
+
+
+def corner_points(n: int, r_min: float = 1e-4, r_max: float = 1.0, generator=None, device=None):
+    """n points spread over the four corners, log-uniform in the distance r to
+    the corner (as many points between 1e-4 and 1e-3 as between 0.1 and 1).
+    Returns x, y and r, for profiles of the residual vs distance to a corner."""
+    u = torch.rand(n, 3, generator=generator)
+    r = r_min * (r_max / r_min) ** u[:, :1]
+    theta = (math.pi / 2) * u[:, 1:2]
+    which = (4 * u[:, 2:3]).long().clamp_max(3)
+    cx = torch.where(which % 2 == 0, 1.0, -1.0)
+    cy = torch.where(which < 2, 1.0, -1.0)
+    x = cx * (1 - r * torch.cos(theta))
+    y = cy * (1 - r * torch.sin(theta))
+    return x.to(device).requires_grad_(True), y.to(device).requires_grad_(True), r.to(device)

@@ -6,7 +6,7 @@ UE24CS352A Machine Learning mini-project.
 
 **Goal:** reproduce the paper's three experiments, then go beyond them:
 
-1. **Fix the boundary error** in the heat-conduction problem by enforcing the boundary condition exactly (distance-function trial solution), which the paper suggests but never implements.
+1. **Fix the boundary error** in the heat-conduction problem by enforcing the boundary condition exactly (distance-function trial solution), which the paper suggests but never implements; then explain, and fix, the error that remains at the corners.
 2. **Fix the error hotspot near the origin** in the consolidation problem: a corner-enriched output, compared against residual-based adaptive sampling (RAD), the paper's own "adaptive re-meshing" future-work item.
 3. **Stress-test parameter discovery** (finding damping `c` and stiffness `k`) on noisy and sparse data, with uncertainty estimates and plain-NN / classical baselines. The paper only tested clean, dense data.
 
@@ -21,6 +21,7 @@ UE24CS352A Machine Learning mini-project.
 | 4 | Reproduce 4.1: Terzaghi consolidation (5 seeds) + locate the error | done |
 | 4b | Improvement: corner-enriched output vs adaptive sampling (RAD) | done |
 | 5 | Reproduce 4.2: steady heat conduction (5 seeds) + the paper's suggested hard-BC fix | done |
+| 5b | Improvement: why every heat PINN fails at the corners, and a corner-enriched output | done |
 | 6 | Improvement 1: exact boundary conditions | done in 5 |
 | 7 | Improvement 2: residual-adaptive sampling | done in 4b |
 | 8 | Improvement 3: noise / sparsity robustness + uncertainty | |
@@ -75,6 +76,8 @@ python experiments/step3b_oscillator_fix.py --device cpu --jobs 5 :: the fix + a
 python experiments/step4_consolidation.py --bench                :: then pick cpu --jobs 5 or cuda
 python experiments/step4b_consolidation_fix.py --device cpu --jobs 5 :: the two fixes, 5 seeds
 python experiments/step5_heat.py --bench                         :: then pick cpu --jobs 5 or cuda
+python experiments/step5_heat.py --device cpu --jobs 3           :: 3 configs x 5 seeds (~2 h on a laptop)
+python experiments/step5b_heat_corners.py --device cpu --jobs 3  :: corner diagnostics + fix, 5 seeds (~1 h)
 ```
 
 Results so far:
@@ -82,7 +85,8 @@ Results so far:
 [Step 3b summary](results/tables/step3b_oscillator_fix_summary.md) ·
 [Step 4 summary](results/tables/step4_consolidation_summary.md) ·
 [Step 4b summary](results/tables/step4b_consolidation_fix_summary.md) ·
-[Step 5 summary](results/tables/step5_heat_summary.md)
+[Step 5 summary](results/tables/step5_heat_summary.md) ·
+[Step 5b summary](results/tables/step5b_heat_corners_summary.md)
 
 ## Findings so far
 
@@ -113,12 +117,24 @@ This is the paper's own "multiply by x" trick taken one step further. Residual-b
 sampling (RAD) moves points toward the corner but cannot make a smooth network represent an
 infinitely steep front, so it helps far less. See Step 4b for the numbers.
 
-**Heat conduction (paper 4.2): the paper's own suggested fix, tested.** The paper states that no
-analytical solution exists; the classic series solution does (`problems/heat.py`), and our own
-finite-difference solver converges to it at second order. With the boundary condition only as a loss
-penalty (the paper's setup), the largest error sits on the edges and the plate dips slightly below
-zero there. Multiplying the network by (1 - x^2)(1 - y^2), as the paper suggests but never tries, makes
-the edges exact and removes most of the error. See Step 5 for the numbers.
+**Heat conduction (paper 4.2): the paper's own suggested fix, tested, and what limits every PINN here.**
+The paper states that no analytical solution exists; the classic series solution does
+(`problems/heat.py`), and our own finite-difference solver converges to it at second order. With the
+boundary condition only as a loss penalty (the paper's setup), the largest error sits on the edges and
+the plate dips slightly below zero there. Multiplying the network by (1 - x^2)(1 - y^2), as the paper
+suggests but never tries, makes the edges exact and cuts the error about 30-fold. See Step 5.
+**The corners (Step 5b).** Along the top edge T = 0, so T_xx = 0 there; along the right edge T_yy = 0,
+so the PDE forces T_xx = -1. At the corner T_xx would have to be both. The exact solution escapes
+because its T_xx depends on the direction you approach from (-2 theta / pi), which no smooth network
+can copy, so every PINN has to break something at the four corners. The paper's soft-BC network breaks
+the boundary condition: its largest error is at the corners, not along the edges in general. The
+hard-BC network breaks the PDE: its residual is exactly 1 at each corner whatever the weights, which
+is why its PDE loss on fresh points is ~100x the training loss. All three facts are checked in
+`tests/test_heat.py` without any training.
+**Fix:** add the exact local solution at each corner (worked out by hand from the corner alone, not
+from the series) to the hard-BC output, so the network only learns a smooth remainder: the same idea
+as the erf term in consolidation. It removes the corner hotspot, lowers the max error and makes the
+training loss trustworthy again; the average error changes little. See Step 5b for the numbers.
 
 Every experiment writes its raw output (loss history, model weights, metrics.json) to a new
 `results/runs/<timestamp>_<name>/` folder, and its report figure to `results/figures/`.
@@ -137,7 +153,8 @@ pinn/          reusable PINN engine
 problems/      one module per physics problem: residual, boundary conditions, reference solution
   oscillator.py  paper 4.3: exact solution, ODE residual, implied-parameter diagnostic
   consolidation.py paper 4.1: two independent exact solutions (Fourier, erfc images), residuals
-  heat.py        paper 4.2: exact series solution (the paper says none exists) + finite-difference check
+  heat.py        paper 4.2: exact series solution (the paper says none exists) + finite-difference check,
+                 hard-BC and corner-enriched outputs
 experiments/   runnable scripts that produce every number and figure in the report
 tests/         fast unit tests for the engine (pytest)
 scripts/       helper scripts (environment check)
