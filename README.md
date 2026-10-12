@@ -24,7 +24,8 @@ UE24CS352A Machine Learning mini-project.
 | 5b | Improvement: why every heat PINN fails at the corners, and a corner-enriched output | done |
 | 6 | Improvement 1: exact boundary conditions | done in 5 |
 | 7 | Improvement 2: residual-adaptive sampling | done in 4b |
-| 8 | Improvement 3: noise / sparsity robustness + uncertainty | |
+| 8a | Improvement 3: finding c and k from noisy / sparse data, vs classical and plain-NN baselines | done |
+| 8b | Improvement 3: uncertainty (error bars that can be trusted) | |
 | 9 | Extras (if time) | |
 | 10 | Results, write-up, slides, demo | |
 
@@ -78,6 +79,7 @@ python experiments/step4b_consolidation_fix.py --device cpu --jobs 5 :: the two 
 python experiments/step5_heat.py --bench                         :: then pick cpu --jobs 5 or cuda
 python experiments/step5_heat.py --device cpu --jobs 3           :: 3 configs x 5 seeds (~2 h on a laptop)
 python experiments/step5b_heat_corners.py --device cpu --jobs 3  :: corner diagnostics + fix, 5 seeds (~1 h)
+python experiments/step8_oscillator_noise.py --device cpu --jobs 4 :: 4 methods x 3 data settings x 4 noise levels x 10 draws (~1.5 h)
 ```
 
 Results so far:
@@ -86,7 +88,8 @@ Results so far:
 [Step 4 summary](results/tables/step4_consolidation_summary.md) ·
 [Step 4b summary](results/tables/step4b_consolidation_fix_summary.md) ·
 [Step 5 summary](results/tables/step5_heat_summary.md) ·
-[Step 5b summary](results/tables/step5b_heat_corners_summary.md)
+[Step 5b summary](results/tables/step5b_heat_corners_summary.md) ·
+[Step 8a summary](results/tables/step8_oscillator_noise_summary.md)
 
 ## Findings so far
 
@@ -134,7 +137,8 @@ is why its PDE loss on fresh points is ~100x the training loss. All three facts 
 **Fix:** add the exact local solution at each corner (worked out by hand from the corner alone, not
 from the series) to the hard-BC output, so the network only learns a smooth remainder: the same idea
 as the erf term in consolidation. It removes the corner hotspot, lowers the max error and makes the
-training loss trustworthy again; the average error changes little. See Step 5b for the numbers.
+training loss trustworthy again; the average error changes little, and training takes about twice as
+long. See Step 5b for the numbers.
 
 Every experiment writes its raw output (loss history, model weights, metrics.json) to a new
 `results/runs/<timestamp>_<name>/` folder, and its report figure to `results/figures/`.
@@ -151,7 +155,8 @@ pinn/          reusable PINN engine
   sampling.py    residual-based adaptive sampling (RAD) as a Trainer hook
   utils.py       seeding, device and float64 setup, timing, run folders
 problems/      one module per physics problem: residual, boundary conditions, reference solution
-  oscillator.py  paper 4.3: exact solution, ODE residual, implied-parameter diagnostic
+  oscillator.py  paper 4.3: exact solution, ODE residual, implied-parameter diagnostic,
+                 noisy / sparse data, classical ODE least-squares fit, Cramer-Rao bound
   consolidation.py paper 4.1: two independent exact solutions (Fourier, erfc images), residuals
   heat.py        paper 4.2: exact series solution (the paper says none exists) + finite-difference check,
                  hard-BC and corner-enriched outputs

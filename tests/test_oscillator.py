@@ -82,3 +82,46 @@ def test_amplitude_ratios():
 def test_overdamped_parameters_are_rejected():
     with pytest.raises(ValueError):
         osc.exact(np.array([0.0]), c=10.0, k=4.0)
+
+
+# ---------------------------------------------------------------- Step 8: imperfect data
+def test_noisy_observations_layout_and_reproducibility():
+    for setting, (n, t_end) in osc.DATA_SETTINGS.items():
+        t, u = osc.noisy_observations(setting, 0.0, draw=3)
+        assert t.shape == (n, 1) and t[0, 0] == 0 and t[-1, 0] == pytest.approx(t_end)
+        assert torch.allclose(u, osc.exact(t))                       # no noise: exact data
+    t, u1 = osc.noisy_observations("full50", 0.01, draw=3)
+    _, u3 = osc.noisy_observations("full50", 0.03, draw=3)
+    _, other = osc.noisy_observations("full50", 0.01, draw=4)
+    exact = osc.exact(t)
+    assert torch.allclose(u3 - exact, 3 * (u1 - exact))              # same random numbers, scaled
+    assert not torch.allclose(u1, other)                             # a different draw differs
+
+
+def test_numerical_solver_matches_closed_form():
+    t = np.linspace(0, osc.T_MAX, 200)
+    assert np.abs(osc.solve_numerically(t, 0.4, 4.0) - osc.exact(t)).max() < 1e-9
+
+
+def test_classical_fit_recovers_parameters_from_clean_data():
+    for setting in osc.DATA_SETTINGS:
+        t, u = osc.noisy_observations(setting, 0.0, draw=0)
+        fit = osc.classical_fit(t.numpy(), u.numpy())
+        assert fit["c"] == pytest.approx(osc.C_TRUE, rel=1e-6)
+        assert fit["k"] == pytest.approx(osc.K_TRUE, rel=1e-6)
+
+
+def test_cramer_rao_bound_scales_with_noise_and_matches_the_classical_spread():
+    """The bound is linear in the noise, and the classical method (asymptotically
+    the best possible) should scatter by about the bound: checked on 40 draws."""
+    c1, k1 = osc.cramer_rao_std("early50", 0.01)
+    c3, k3 = osc.cramer_rao_std("early50", 0.03)
+    assert c3 == pytest.approx(3 * c1) and k3 == pytest.approx(3 * k1)
+    assert c1 > k1                                   # damping is harder to pin down than stiffness
+    fits = [osc.classical_fit(*(a.numpy() for a in osc.noisy_observations("early50", 0.03, d)))
+            for d in range(40)]
+    c_rel = np.array([f["c"] for f in fits]) / osc.C_TRUE - 1
+    assert 0.7 < c_rel.std() / c3 < 1.3
+    assert abs(c_rel.mean()) < 0.5 * c3              # no large bias
+    se = np.median([f["se_c"] for f in fits]) / osc.C_TRUE
+    assert 0.8 < se / c3 < 1.2                       # its own error bars agree with the bound
