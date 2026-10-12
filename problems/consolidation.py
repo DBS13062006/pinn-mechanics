@@ -92,23 +92,45 @@ def pressure(model, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
     return x * model(x, t)
 
 
-def pde_residual(model, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+def half_space(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    """erf(x / (2 sqrt t)): the exact pressure in a layer with NO base (a half-space)
+    that is suddenly drained at x = 0. It satisfies the PDE, p = 0 at x = 0 and
+    p = 1 at t = 0, and it contains the corner jump exactly. Near the corner the
+    real layer cannot yet "feel" its base at x = 1, so this is the true local
+    behaviour there.
+    """
+    t_safe = t.clamp_min(1e-30)          # t = 0 gives erf(+inf) = 1 for x > 0, erf(0) = 0 at x = 0
+    return torch.special.erf(x / (2.0 * torch.sqrt(t_safe)))
+
+
+def pressure_enriched(model, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    """Corner-enriched output: p = erf(x / 2 sqrt t) + x * t * network(x, t).
+
+    The erf term carries the jump; the x * t factor keeps p = 0 at x = 0 and
+    p = 1 at t = 0 exact for ANY network, so the network only has to learn a
+    smooth correction (the effect of the impermeable base) and the loss has
+    just two terms: the PDE and the no-flow condition at x = 1.
+    """
+    return half_space(x, t) + x * t * model(x, t)
+
+
+def pde_residual(model, x: torch.Tensor, t: torch.Tensor, output=pressure) -> torch.Tensor:
     """p_t - p_xx at (x, t). Zero wherever the consolidation equation holds."""
-    p = pressure(model, x, t)
+    p = output(model, x, t)
     p_t = grad(p, t)
     p_xx = grad(grad(p, x), x)
     return p_t - p_xx
 
 
-def neumann_residual(model, t: torch.Tensor) -> torch.Tensor:
+def neumann_residual(model, t: torch.Tensor, output=pressure) -> torch.Tensor:
     """p_x at x = 1 (should be 0: impermeable base)."""
     x = torch.ones_like(t).requires_grad_(True)
-    return grad(pressure(model, x, t), x)
+    return grad(output(model, x, t), x)
 
 
-def initial_residual(model, x: torch.Tensor) -> torch.Tensor:
+def initial_residual(model, x: torch.Tensor, output=pressure) -> torch.Tensor:
     """p(x, 0) - 1 (should be 0)."""
-    return pressure(model, x, torch.zeros_like(x)) - 1.0
+    return output(model, x, torch.zeros_like(x)) - 1.0
 
 
 # ------------------------------------------------------------ point sets

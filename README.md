@@ -7,7 +7,7 @@ UE24CS352A Machine Learning mini-project.
 **Goal:** reproduce the paper's three experiments, then go beyond them:
 
 1. **Fix the boundary error** in the heat-conduction problem by enforcing the boundary condition exactly (distance-function trial solution), which the paper suggests but never implements.
-2. **Fix the error hotspot near the origin** in the consolidation problem with residual-based adaptive sampling (RAD), the paper's own "adaptive re-meshing" future-work item.
+2. **Fix the error hotspot near the origin** in the consolidation problem: a corner-enriched output, compared against residual-based adaptive sampling (RAD), the paper's own "adaptive re-meshing" future-work item.
 3. **Stress-test parameter discovery** (finding damping `c` and stiffness `k`) on noisy and sparse data, with uncertainty estimates and plain-NN / classical baselines. The paper only tested clean, dense data.
 
 ## Status
@@ -19,9 +19,10 @@ UE24CS352A Machine Learning mini-project.
 | 3 | Reproduce 4.3: damped oscillator, find c and k (5 seeds) + diagnose slow c | done |
 | 3b | Improvement: two-stage warm start makes discovery of c reliable and fast | done |
 | 4 | Reproduce 4.1: Terzaghi consolidation (5 seeds) + locate the error | done |
+| 4b | Improvement: corner-enriched output vs adaptive sampling (RAD) | done |
 | 5 | Reproduce 4.2: steady heat conduction | |
 | 6 | Improvement 1: exact boundary conditions | |
-| 7 | Improvement 2: residual-adaptive sampling | |
+| 7 | Improvement 2: residual-adaptive sampling | done in 4b |
 | 8 | Improvement 3: noise / sparsity robustness + uncertainty | |
 | 9 | Extras (if time) | |
 | 10 | Results, write-up, slides, demo | |
@@ -72,12 +73,14 @@ python experiments/step3_oscillator.py --device cuda             :: 3 configs x 
 python experiments/step3_oscillator.py --device cpu --jobs 5     :: same, 5 runs in parallel on CPU
 python experiments/step3b_oscillator_fix.py --device cpu --jobs 5 :: the fix + ablations, 10 seeds
 python experiments/step4_consolidation.py --bench                :: then pick cpu --jobs 5 or cuda
+python experiments/step4b_consolidation_fix.py --device cpu --jobs 5 :: the two fixes, 5 seeds
 ```
 
 Results so far:
 [Step 3 summary](results/tables/step3_oscillator_summary.md) ·
 [Step 3b summary](results/tables/step3b_oscillator_fix_summary.md) ·
-[Step 4 summary](results/tables/step4_consolidation_summary.md)
+[Step 4 summary](results/tables/step4_consolidation_summary.md) ·
+[Step 4b summary](results/tables/step4b_consolidation_fix_summary.md)
 
 ## Findings so far
 
@@ -102,6 +105,11 @@ PINN's error is concentrated at small times. The first 2% of the time window hol
 points is orders of magnitude larger than at the training points. A max error on a uniform grid is
 not meaningful here (it only measures how close the grid gets to the jump), so errors are reported
 as a function of time. See Step 4 for the numbers.
+**Fix:** write the output as p = erf(x / 2 sqrt t) + x t N(x, t). The erf term is the exact solution
+for a layer with no base and carries the jump; the network learns only the smooth effect of the base.
+This is the paper's own "multiply by x" trick taken one step further. Residual-based adaptive
+sampling (RAD) moves points toward the corner but cannot make a smooth network represent an
+infinitely steep front, so it helps far less. See Step 4b for the numbers.
 
 Every experiment writes its raw output (loss history, model weights, metrics.json) to a new
 `results/runs/<timestamp>_<name>/` folder, and its report figure to `results/figures/`.
@@ -115,6 +123,7 @@ pinn/          reusable PINN engine
   train.py       Trainer: Adam then L-BFGS, per-term loss logging, eval hooks
   metrics.py     relative L2 error, max error, parameter error
   plotting.py    shared figure style (colorblind-checked palette)
+  sampling.py    residual-based adaptive sampling (RAD) as a Trainer hook
   utils.py       seeding, device and float64 setup, timing, run folders
 problems/      one module per physics problem: residual, boundary conditions, reference solution
   oscillator.py  paper 4.3: exact solution, ODE residual, implied-parameter diagnostic
