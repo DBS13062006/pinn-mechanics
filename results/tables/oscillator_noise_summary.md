@@ -1,4 +1,4 @@
-# Step 8a: finding c and k from noisy and sparse data
+# Damped oscillator: finding c and k from noisy and sparse data
 
 Truth c = 0.4, k = 4; every method starts from c = 0.2, k = 2. Median relative error over 10 noise draws, worst in brackets.
 Noise: standard deviation as a fraction of the initial displacement.
@@ -62,7 +62,7 @@ Noise: standard deviation as a fraction of the initial displacement.
 | classical (ODE least squares) | 0.2 s | 30/30 |
 | plain NN + regression | 13.4 s | 10/30 |
 | standard PINN (Adam 20k + L-BFGS) | 61.1 s | 26/30 |
-| two-stage PINN (Step 3b) | 38.0 s | 23/30 |
+| two-stage PINN | 38.0 s | 23/30 |
 
 Two-stage runs whose data-only fit implied impossible values (c < 0 or k <= 0), so stage 3 started from the initial guess instead: 1 of 120.
 The plain NN's time is its share of the two-stage run (stage 1 only).

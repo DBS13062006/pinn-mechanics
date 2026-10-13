@@ -81,7 +81,7 @@ class Trainer:
                  Runs without gradient tracking for speed; a metric that
                  needs derivatives must wrap that part in torch.enable_grad().
         hooks:   optional callables run after every ADAM step, e.g. to
-                 resample collocation points (Step 7). Not run during L-BFGS:
+                 resample collocation points (adaptive sampling). Not run during L-BFGS:
                  changing the points would invalidate the curvature history
                  L-BFGS has built up.
     """

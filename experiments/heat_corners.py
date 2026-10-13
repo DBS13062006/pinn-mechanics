@@ -1,8 +1,8 @@
 """
-Step 5b: why both heat PINNs go wrong at the corners of the square, and a fix.
+Why both heat PINNs go wrong at the corners of the square, and a fix.
 
-Step 5 found that the soft-BC PINN (the paper's) has its largest error on the
-edges, and that the hard-BC PINN's PDE loss on fresh points is ~100x its
+The reproduction (heat_reproduce.py) found that the soft-BC PINN (the paper's)
+has its largest error on the edges, and that the hard-BC PINN's PDE loss on fresh points is ~100x its
 training value, almost all of it near the four corners.
 
 The cause is the square itself (details in problems/heat.py). Along the top
@@ -13,18 +13,18 @@ approach (-2 theta / pi); a tanh network is smooth and cannot. So every
 network must break either the boundary condition (soft BC) or the PDE (hard
 BC: the residual is exactly 1 at each corner, whatever the network).
 
-Configurations (Step 5's network, points, loss weights; Adam 5k then L-BFGS):
-  soft5k    Step 5's soft BC, rerun with corner diagnostics
-  hard5k    Step 5's hard BC, rerun with corner diagnostics
+Configurations (the reproduction's network, points, loss weights; Adam 5k then L-BFGS):
+  soft5k    the reproduction's soft BC, rerun with corner diagnostics
+  hard5k    the reproduction's hard BC, rerun with corner diagnostics
   corner5k  hard BC + the exact local solution at each corner
             (problems/heat.py: temperature_corner); the network only learns
-            the smooth remainder. Same idea as the erf term in Step 4b.
-soft5k and hard5k train exactly as in Step 5, so on the same machine their
-errors must match Step 5's table (checked and reported).
+            the smooth remainder. Same idea as the erf term in consolidation_enrichment.py.
+soft5k and hard5k train exactly as in the reproduction, so on the same machine their
+errors must match the reproduction's table (checked and reported).
 
 Usage (from the repo root):
-  python experiments/step5b_heat_corners.py --device cpu --jobs 3
-  python experiments/step5b_heat_corners.py --quick
+  python experiments/heat_corners.py --device cpu --jobs 3
+  python experiments/heat_corners.py --quick
 """
 from __future__ import annotations
 
@@ -44,8 +44,8 @@ import numpy as np
 import torch
 from matplotlib.colors import LogNorm
 
-# Shared settings from Step 5 (same folder, so a plain import works).
-import step5_heat as s5
+# Shared settings from the reproduction (same folder, so a plain import works).
+import heat_reproduce as s5
 from pinn import (TrainConfig, Trainer, env_info, make_run_dir, relative_l2,
                   save_json, setup_torch)
 from pinn.plotting import INK, INK_2, MUTED, SERIES, apply_style
@@ -56,7 +56,7 @@ CONFIGS = {"soft5k": heat.temperature_soft, "hard5k": heat.temperature_hard,
            "corner5k": heat.temperature_corner}
 LABELS = {"soft5k": "soft BC", "hard5k": "hard BC", "corner5k": "hard BC +\ncorner terms"}
 COLORS = {"soft5k": MUTED, "hard5k": SERIES[0], "corner5k": SERIES[2]}
-STEP5_TABLE = Path("results/tables/step5_heat_runs.csv")
+REPRODUCE_TABLE = Path("results/tables/heat_reproduce_runs.csv")
 NEAR_CORNER = 0.15                      # "near a corner": 4 quarter discs = 1.8% of the area
 # Max error vs distance to the nearest corner, on the 0.01 test grid. The first bin is the corner point itself.
 CORNER_BINS = np.array([0.0, 1e-9, 0.015, 0.035, 0.075, 0.15, 0.3, 0.6, 1.5])
@@ -79,7 +79,7 @@ def run_one(config: str, seed: int, device_name: str, quick: bool = False) -> di
         torch.set_num_threads(1)
     out_fn = CONFIGS[config]
     soft = config == "soft5k"
-    # Training is identical to Step 5's run_one, so soft5k / hard5k reproduce Step 5 exactly.
+    # Training is identical to the reproduction's run_one, so soft5k / hard5k reproduce it exactly.
     model, x_f, y_f, x_b, y_b = s5.build(device, seed)
     loss_fn = s5.make_loss(model, out_fn, not soft, x_f, y_f, x_b, y_b)
 
@@ -109,7 +109,7 @@ def run_one(config: str, seed: int, device_name: str, quick: bool = False) -> di
     yu = (2 * torch.rand(20_000, 1, generator=gen) - 1).to(device).requires_grad_(True)
     r2 = (heat.pde_residual(model, xu, yu, out_fn).detach() ** 2).cpu().numpy().ravel()
     xn, yn = xu.detach().cpu().numpy().ravel(), yu.detach().cpu().numpy().ravel()
-    corner_box = (1 - np.abs(xn) < 0.1) & (1 - np.abs(yn) < 0.1)       # Step 5's definition
+    corner_box = (1 - np.abs(xn) < 0.1) & (1 - np.abs(yn) < 0.1)       # the reproduction's definition
     xc, yc, rc = heat.corner_points(N_PROFILE, generator=gen, device=device)
     rc2 = (heat.pde_residual(model, xc, yc, out_fn).detach() ** 2).cpu().numpy().ravel()
 
@@ -141,11 +141,11 @@ COLS = ["config", "seed", "rel_l2", "max_err", "max_err_x", "max_err_y", "max_er
         "iters_total", "lbfgs_iterations", "seconds", "device"]
 
 
-def compare_with_step5(runs: list[dict]) -> str:
-    """soft5k / hard5k train exactly as in Step 5: their errors should match Step 5's table."""
-    if not STEP5_TABLE.exists():
-        return "Step 5 table not found: reproducibility check skipped."
-    with open(STEP5_TABLE, newline="", encoding="utf-8") as f:
+def compare_with_reproduction(runs: list[dict]) -> str:
+    """soft5k / hard5k train exactly as in the reproduction: their errors should match the reproduction's table."""
+    if not REPRODUCE_TABLE.exists():
+        return "Reproduction table not found: reproducibility check skipped."
+    with open(REPRODUCE_TABLE, newline="", encoding="utf-8") as f:
         base = {(r["config"], int(r["seed"])): r for r in csv.DictReader(f)}
     diffs = []
     for r in runs:
@@ -154,15 +154,15 @@ def compare_with_step5(runs: list[dict]) -> str:
             for k in ("rel_l2", "max_err"):
                 diffs.append(abs(r[k] - float(b[k])) / float(b[k]))
     if not diffs:
-        return "No matching Step 5 runs: reproducibility check skipped."
-    return (f"Reproducibility: soft5k and hard5k reran Step 5's training; over {len(diffs) // 2} runs their "
-            f"rel. L2 and max errors differ from Step 5's table by at most {max(diffs):.1e} (relative). "
+        return "No matching reproduction runs: reproducibility check skipped."
+    return (f"Reproducibility: soft5k and hard5k reran the reproduction's training; over {len(diffs) // 2} runs their "
+            f"rel. L2 and max errors differ from the reproduction's table by at most {max(diffs):.1e} (relative). "
             "Exact zeros mean the same machine produced bit-identical training.")
 
 
 def write_tables(runs: list[dict], tables: Path, quick: bool = False) -> None:
     tables.mkdir(parents=True, exist_ok=True)
-    with open(tables / "step5b_heat_corners_runs.csv", "w", newline="", encoding="utf-8") as f:
+    with open(tables / "heat_corners_runs.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=COLS, extrasaction="ignore")
         w.writeheader()
         for r in runs:
@@ -170,7 +170,7 @@ def write_tables(runs: list[dict], tables: Path, quick: bool = False) -> None:
     med = lambda rs, k: statistics.median(r[k] for r in rs)
     worst = lambda rs, k: max(r[k] for r in rs)
     n_seeds = max(sum(r["config"] == c for r in runs) for c in CONFIGS)
-    lines = ["# Step 5b: the corners of the heat problem", "",
+    lines = ["# Steady heat conduction: the corners", "",
              f"Errors against the exact series solution. Median over {n_seeds} seeds (worst in brackets). "
              + ("QUICK TEST RUN (Adam 500, L-BFGS 300): not results." if quick else
                 "Adam 5k then L-BFGS for every configuration."), "",
@@ -194,15 +194,15 @@ def write_tables(runs: list[dict], tables: Path, quick: bool = False) -> None:
             f"| {statistics.median(r['test_pde_loss'] / r['train_pde_loss'] for r in rs):.1f}x "
             f"| {med(rs, 'T_min'):.1e} ({min(r['T_min'] for r in rs):.1e}) "
             f"| {statistics.mean(r['seconds'] for r in rs):.0f} s |")
-    lines += ["", "\"Near the corners\" for the PDE loss means within 0.1 of both edges, as in Step 5.", "",
+    lines += ["", "\"Near the corners\" for the PDE loss means within 0.1 of both edges, as in the reproduction.", "",
               "Facts about the problem itself (no training involved; checked in tests/test_heat.py):",
               "- Exact solution: approaching a corner at angle theta from the horizontal edge, T_xx -> -2 theta / pi "
               "(0 along that edge, -1 along the other), at every distance. A smooth network has one value there.",
               "- Any hard-BC network T = (1 - x^2)(1 - y^2) N has PDE residual exactly 1 at the four corners.",
               "- The function a hard-BC network must learn, N = T / ((1 - x^2)(1 - y^2)), grows by "
               f"ln(10) / (2 pi) = {math.log(10) / (2 * math.pi):.3f} for every factor of 10 closer to a corner.",
-              "", "" if quick else compare_with_step5(runs)]
-    (tables / "step5b_heat_corners_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+              "", "" if quick else compare_with_reproduction(runs)]
+    (tables / "heat_corners_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def exact_curvature_by_angle(theta: np.ndarray, dist: float) -> np.ndarray:
@@ -304,7 +304,7 @@ def make_figure(runs: list[dict], path: Path) -> None:
     strip(axes[1, 2], groups, "max_err")
     axes[1, 2].set_title("(f) Max error over the square, every seed")
 
-    fig.suptitle("Step 5b: the corners of the heat problem", x=0.01, ha="left", fontweight="bold")
+    fig.suptitle("Steady heat conduction: the corners", x=0.01, ha="left", fontweight="bold")
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=150)
     plt.close(fig)
@@ -312,7 +312,7 @@ def make_figure(runs: list[dict], path: Path) -> None:
 
 # ---------------------------------------------------------------- main
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Step 5b: the corners of the heat problem")
+    parser = argparse.ArgumentParser(description="Steady heat conduction: the corners")
     parser.add_argument("--configs", nargs="+", default=list(CONFIGS), choices=list(CONFIGS))
     parser.add_argument("--seeds", nargs="+", type=int, default=[0, 1, 2, 3, 4])
     parser.add_argument("--device", default="cpu", choices=["cuda", "cpu"])
@@ -323,8 +323,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.quick:
         args.seeds = args.seeds[:2]
-    run_dir = Path(args.resume) if args.resume else make_run_dir("step5b_heat_corners" + ("_quick" if args.quick else ""))
-    # Every finished training is saved here immediately (see Step 5).
+    run_dir = Path(args.resume) if args.resume else make_run_dir("heat_corners" + ("_quick" if args.quick else ""))
+    # Every finished training is saved here immediately (see heat_reproduce.py).
     partial = run_dir / "partial"
     partial.mkdir(parents=True, exist_ok=True)
     runs = []
@@ -354,13 +354,13 @@ def main() -> int:
     with open(run_dir / "runs.pkl", "wb") as f:
         pickle.dump(runs, f)
     if args.quick:
-        tables, figure = run_dir / "tables", run_dir / "step5b_heat_corners_quick.png"
+        tables, figure = run_dir / "tables", run_dir / "heat_corners_quick.png"
     else:
-        tables, figure = Path("results/tables"), Path("results/figures/step5b_heat_corners.png")
+        tables, figure = Path("results/tables"), Path("results/figures/heat_corners.png")
     write_tables(runs, tables, args.quick)
     make_figure(runs, figure)
     save_json({"args": vars(args), "env": env_info()}, run_dir / "metrics.json")
-    print("\n" + (tables / "step5b_heat_corners_summary.md").read_text(encoding="utf-8"))
+    print("\n" + (tables / "heat_corners_summary.md").read_text(encoding="utf-8"))
     print(f"figure: {figure}\ntables: {tables}\nraw runs: {run_dir}")
     return 0
 

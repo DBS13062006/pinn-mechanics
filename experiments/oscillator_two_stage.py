@@ -1,8 +1,10 @@
 """
-Step 3b: fix the slow, unreliable discovery of c in the oscillator problem.
+Two-stage warm start: fix the slow, unreliable discovery of c in the
+oscillator problem.
 
-Diagnosis from Step 3: c and k simply follow the curve the network currently
-draws. Early on, the network has only fitted the first oscillations and is
+Diagnosis from the reproduction (oscillator_reproduce.py): c and k simply
+follow the curve the network currently draws. Early on, the network has only
+fitted the first oscillations and is
 flat afterwards; a flat tail looks like heavy damping (c ~ 1), and since
 u = 0 satisfies the ODE exactly while the late observations hold only 1% of
 the data's energy, training can get stuck there. On top of that, c and k
@@ -20,15 +22,15 @@ warm start for the PINN):
   Stage 3b full PINN loss, c and k free: final joint polish
 
 Configurations (10 seeds each; the paper's Adam-100k baseline is read from
-Step 3's committed table instead of being rerun):
-  adam20k_lbfgs        best method from Step 3, for comparison
+the reproduction's committed table instead of being rerun):
+  adam20k_lbfgs        best method from the reproduction, for comparison
   two_stage            the full fix
   two_stage_no_init    ablation: skip stage 2 (and 3a): c, k start at 0.2, 2.0
   two_stage_no_freeze  ablation: skip stage 3a
 
 Usage (from the repo root):
-  python experiments/step3b_oscillator_fix.py --device cpu --jobs 5
-  python experiments/step3b_oscillator_fix.py --quick        # smoke test
+  python experiments/oscillator_two_stage.py --device cpu --jobs 5
+  python experiments/oscillator_two_stage.py --quick        # smoke test
 """
 from __future__ import annotations
 
@@ -51,7 +53,7 @@ from pinn import (MLP, TrainConfig, Trainer, env_info, make_run_dir,
 from pinn.plotting import BLUES, INK_2, MUTED, SERIES, apply_style
 from problems import oscillator as osc
 
-# Paper section 4.3 settings (same as Step 3)
+# Paper section 4.3 settings (same as the reproduction)
 WIDTH, DEPTH, INIT, LR = 32, 3, "xavier_uniform", 5e-4
 WEIGHTS = {"ode": 0.25, "ic": 0.25, "data": 0.25}
 N_DATA, N_F = 50, 100
@@ -68,7 +70,7 @@ LABELS = {
     "two_stage": "two-stage\n(full fix)",
 }
 PLOT_ORDER = ["paper", "adam20k_lbfgs", "two_stage_no_init", "two_stage_no_freeze", "two_stage"]
-STEP3_TABLE = Path("results/tables/step3_oscillator_runs.csv")
+REPRODUCE_TABLE = Path("results/tables/oscillator_reproduce_runs.csv")
 
 
 def run_one(config: str, seed: int, device_name: str, quick: bool = False) -> dict:
@@ -157,11 +159,11 @@ def run_one(config: str, seed: int, device_name: str, quick: bool = False) -> di
 
 # ---------------------------------------------------------------- outputs
 def load_paper_baseline() -> list[dict]:
-    """The paper-setting runs from Step 3 (5 seeds), so we don't rerun 100k-iteration jobs."""
-    if not STEP3_TABLE.exists():
+    """The paper-setting runs from the reproduction (5 seeds), so we don't rerun 100k-iteration jobs."""
+    if not REPRODUCE_TABLE.exists():
         return []
     rows = []
-    with open(STEP3_TABLE, encoding="utf-8") as f:
+    with open(REPRODUCE_TABLE, encoding="utf-8") as f:
         for r in csv.DictReader(f):
             if r["config"] == "paper":
                 rows.append({"config": "paper", "seed": int(r["seed"]),
@@ -175,15 +177,15 @@ def write_tables(runs: list[dict], paper: list[dict], tables: Path) -> None:
     cols = ["config", "seed", "c", "k", "c_err", "k_err", "success", "u_rel_l2", "ode_test",
             "c_stage2", "k_stage2", "c_err_stage2", "k_err_stage2", "iters_total", "seconds",
             "seconds_stage1", "seconds_stage3a", "seconds_stage3b", "seconds_joint", "device"]
-    with open(tables / "step3b_oscillator_fix_runs.csv", "w", newline="", encoding="utf-8") as f:
+    with open(tables / "oscillator_two_stage_runs.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
         for r in runs:
             w.writerow({c: r.get(c, "") for c in cols})
 
-    lines = ["# Step 3b: fixing slow discovery of c (oscillator, paper section 4.3)", "",
+    lines = ["# Damped oscillator: fixing slow discovery of c (paper section 4.3)", "",
              "Truth: c = 0.4, k = 4. Start: c = 0.2, k = 2. A run succeeds if both end within 1%.",
-             "The paper row is Step 3's 5 runs with the paper's exact settings.", "",
+             "The paper row is the reproduction's 5 runs with the paper's exact settings.", "",
              "| method | succeeded | c error (median / worst) | k error (median / worst) | time per run (mean) |",
              "|---|---|---|---|---|"]
     for config in PLOT_ORDER:
@@ -203,7 +205,7 @@ def write_tables(runs: list[dict], paper: list[dict], tables: Path) -> None:
                   f"worst {max(r['c_err_stage2'] for r in two):.1e}; "
                   f"k error median {statistics.median(r['k_err_stage2'] for r in two):.1e}, "
                   f"worst {max(r['k_err_stage2'] for r in two):.1e}."]
-    (tables / "step3b_oscillator_fix_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (tables / "oscillator_two_stage_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def role_color(config: str) -> str:
@@ -270,7 +272,7 @@ def make_figure(runs: list[dict], paper: list[dict], path: Path) -> None:
     ax.set(title="(d) Two-stage fix: error of c before and after the physics",
            ylabel="|c - true| / true")
 
-    fig.suptitle("Step 3b: fixing the slow, unreliable discovery of c", x=0.01, ha="left",
+    fig.suptitle("Damped oscillator: fixing the slow, unreliable discovery of c", x=0.01, ha="left",
                  fontweight="bold")
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=150)
@@ -279,7 +281,7 @@ def make_figure(runs: list[dict], paper: list[dict], path: Path) -> None:
 
 # ---------------------------------------------------------------- main
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Step 3b: oscillator fix")
+    parser = argparse.ArgumentParser(description="Damped oscillator: two-stage warm start")
     parser.add_argument("--configs", nargs="+", default=CONFIGS, choices=CONFIGS)
     parser.add_argument("--seeds", nargs="+", type=int, default=list(range(10)))
     parser.add_argument("--device", default="cpu", choices=["cuda", "cpu"])
@@ -289,7 +291,7 @@ def main() -> int:
     if args.quick:
         args.seeds = args.seeds[:2]
 
-    run_dir = make_run_dir("step3b_oscillator_fix" + ("_quick" if args.quick else ""))
+    run_dir = make_run_dir("oscillator_two_stage" + ("_quick" if args.quick else ""))
     tasks = [(c, s) for c in args.configs for s in args.seeds]
     print(f"{len(tasks)} runs on {args.device} with {args.jobs} in parallel -> {run_dir}")
 
@@ -308,14 +310,14 @@ def main() -> int:
         pickle.dump(runs, f)
     paper = load_paper_baseline()
     if args.quick:
-        tables, figure = run_dir / "tables", run_dir / "step3b_oscillator_fix_quick.png"
+        tables, figure = run_dir / "tables", run_dir / "oscillator_two_stage_quick.png"
     else:
-        tables, figure = Path("results/tables"), Path("results/figures/step3b_oscillator_fix.png")
+        tables, figure = Path("results/tables"), Path("results/figures/oscillator_two_stage.png")
     write_tables(runs, paper, tables)
     make_figure(runs, paper, figure)
     save_json({"args": vars(args), "env": env_info()}, run_dir / "metrics.json")
 
-    print("\n" + (tables / "step3b_oscillator_fix_summary.md").read_text(encoding="utf-8"))
+    print("\n" + (tables / "oscillator_two_stage_summary.md").read_text(encoding="utf-8"))
     print(f"figure: {figure}\ntables: {tables}\nraw runs: {run_dir}")
     return 0
 

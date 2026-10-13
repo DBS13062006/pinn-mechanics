@@ -1,12 +1,13 @@
 """
-Step 4b: fix the consolidation PINN's error near the corner (x = 0, t = 0).
+Fix the consolidation PINN's error near the corner (x = 0, t = 0).
 
-Step 4 found that the error sits where the 500 random collocation points are
-not (first 2% of the time window: ~11 points, most of the error), that the
+The reproduction (consolidation_reproduce.py) found that the error sits where
+the 500 random collocation points are not (first 2% of the time window:
+~11 points, most of the error), that the
 training loss there says nothing about the real accuracy, and that every run
 predicts a physically impossible pressure above 1.
 
-Two fixes, same budget as Step 4's cheaper setting (Adam 10k, then L-BFGS):
+Two fixes, same budget as the reproduction's cheaper setting (Adam 10k, then L-BFGS):
   rad           Residual-based adaptive sampling: every 1000 Adam steps the
                 500 collocation points are re-drawn where the PDE residual is
                 large (pinn/sampling.py). General: knows nothing about corners.
@@ -16,12 +17,12 @@ Two fixes, same budget as Step 4's cheaper setting (Adam 10k, then L-BFGS):
                 only learns the smooth effect of the base. Uses one piece of
                 physics knowledge, so it is problem-specific.
   enriched_rad  both together.
-Baselines are read from Step 4's committed table (same seeds, same machine):
+Baselines are read from the reproduction's committed table (same seeds, same machine):
   paper (Adam 50k + L-BFGS) and Adam 10k + L-BFGS.
 
 Usage (from the repo root):
-  python experiments/step4b_consolidation_fix.py --device cpu --jobs 5
-  python experiments/step4b_consolidation_fix.py --quick
+  python experiments/consolidation_enrichment.py --device cpu --jobs 5
+  python experiments/consolidation_enrichment.py --quick
 """
 from __future__ import annotations
 
@@ -40,8 +41,8 @@ import numpy as np
 import torch
 from matplotlib.colors import LogNorm
 
-# Shared settings and grids from Step 4 (same folder, so a plain import works).
-import step4_consolidation as s4
+# Shared settings and grids from the reproduction (same folder, so a plain import works).
+import consolidation_reproduce as s4
 from pinn import (MLP, TrainConfig, Trainer, env_info, make_run_dir,
                   relative_l2, save_json, set_seed, setup_torch)
 from pinn.plotting import BLUES, INK, INK_2, MUTED, SERIES, apply_style
@@ -54,7 +55,7 @@ LABELS = {"paper": "paper\n(Adam 50k)", "adam10k": "baseline\n(Adam 10k)", "rad"
 ORDER = ["paper", "adam10k", "rad", "enriched", "enriched_rad"]
 ADAM_ITERS = 10_000
 RAD_EVERY, RAD_POOL = 1_000, 20_000
-STEP4_TABLE = Path("results/tables/step4_consolidation_runs.csv")
+REPRODUCE_TABLE = Path("results/tables/consolidation_reproduce_runs.csv")
 METRICS = ["rel_l2", "max_err_t_ge_0.01", "max_err_t_ge_0.05", "err_share_t_lt_0.01",
            "coll_points_t_lt_0.01", "train_pde_loss", "test_pde_loss", "p_min", "p_max", "seconds"]
 
@@ -92,7 +93,7 @@ def run_one(method: str, seed: int, device_name: str, quick: bool = False) -> di
                       log_every=100, weights=s4.WEIGHTS, verbose=False)
     trainer = Trainer(model.parameters(), loss_fn, cfg, eval_fn=eval_fn, hooks=hooks).train()
 
-    # --- diagnostics (same as Step 4) ---------------------------------------
+    # --- diagnostics (same as the reproduction) ---------------------------------------
     with torch.no_grad():
         p_uni = out_fn(model, X, T).cpu().numpy().reshape(shape)
     x_uni, t_uni = X.cpu().numpy().reshape(shape), T.cpu().numpy().reshape(shape)
@@ -128,11 +129,11 @@ def run_one(method: str, seed: int, device_name: str, quick: bool = False) -> di
     }
 
 
-def load_step4() -> list[dict]:
-    if not STEP4_TABLE.exists():
+def load_reproduction() -> list[dict]:
+    if not REPRODUCE_TABLE.exists():
         return []
     rows = []
-    with open(STEP4_TABLE, encoding="utf-8") as f:
+    with open(REPRODUCE_TABLE, encoding="utf-8") as f:
         for r in csv.DictReader(f):
             row = {"config": r["config"], "seed": int(r["seed"])}
             row.update({m: float(r[m]) for m in METRICS})
@@ -143,15 +144,15 @@ def load_step4() -> list[dict]:
 def write_tables(runs: list[dict], base: list[dict], tables: Path) -> None:
     tables.mkdir(parents=True, exist_ok=True)
     cols = ["config", "seed"] + METRICS + ["iters_total", "device"]
-    with open(tables / "step4b_consolidation_fix_runs.csv", "w", newline="", encoding="utf-8") as f:
+    with open(tables / "consolidation_enrichment_runs.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
         for r in runs:
             w.writerow(r)
     med = lambda rs, k: statistics.median(r[k] for r in rs)
     worst = lambda rs, k: max(r[k] for r in rs)
-    lines = ["# Step 4b: fixing the consolidation error near the corner (paper section 4.1)", "",
-             "Median over 5 seeds (worst in brackets). Paper and baseline rows are Step 4's runs.", "",
+    lines = ["# 1D consolidation: fixing the error near the corner (paper section 4.1)", "",
+             "Median over 5 seeds (worst in brackets). Paper and baseline rows are the reproduction's runs.", "",
              "| method | rel. L2 error | max error, t >= 0.01 | max error, t >= 0.05 "
              "| highest predicted pressure (must be <= 1) | collocation points in t < 0.01 "
              "| PDE loss on fresh points | time per run |",
@@ -169,7 +170,7 @@ def write_tables(runs: list[dict], base: list[dict], tables: Path) -> None:
             f"| {med(rs, 'coll_points_t_lt_0.01'):.0f} of 500 "
             f"| {med(rs, 'test_pde_loss'):.1e} "
             f"| {statistics.mean(r['seconds'] for r in rs):.0f} s |")
-    (tables / "step4b_consolidation_fix_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (tables / "consolidation_enrichment_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def strip(ax, groups, key, log=True):
@@ -190,7 +191,7 @@ def make_figure(runs: list[dict], base: list[dict], path: Path) -> None:
     groups = [(c, [r for r in (base if c in ("paper", "adam10k") else runs) if r["config"] == c]) for c in ORDER]
     groups = [(c, rs) for c, rs in groups if rs]
 
-    # (a) max error vs time, median over seeds, per new method (baseline curve not stored in Step 4's CSV)
+    # (a) max error vs time, median over seeds, per new method (baseline curve not stored in the reproduction's CSV)
     ax = axes[0, 0]
     for i, method in enumerate(METHODS):
         rs = [r for r in runs if r["config"] == method]
@@ -241,7 +242,7 @@ def make_figure(runs: list[dict], base: list[dict], path: Path) -> None:
         ax.set_title(title)
     axes[1, 1].axhline(0.045, color=INK_2, lw=0.9, ls=":")
     axes[1, 2].axhline(1.0, color=INK_2, lw=0.9, ls=":")
-    fig.suptitle("Step 4b: fixing the consolidation error near the corner", x=0.01, ha="left",
+    fig.suptitle("1D consolidation: fixing the error near the corner", x=0.01, ha="left",
                  fontweight="bold")
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=150)
@@ -249,7 +250,7 @@ def make_figure(runs: list[dict], base: list[dict], path: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Step 4b: consolidation fixes")
+    parser = argparse.ArgumentParser(description="1D consolidation: corner enrichment vs adaptive sampling")
     parser.add_argument("--methods", nargs="+", default=METHODS, choices=METHODS)
     parser.add_argument("--seeds", nargs="+", type=int, default=[0, 1, 2, 3, 4])
     parser.add_argument("--device", default="cpu", choices=["cuda", "cpu"])
@@ -258,7 +259,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.quick:
         args.seeds = args.seeds[:2]
-    run_dir = make_run_dir("step4b_consolidation_fix" + ("_quick" if args.quick else ""))
+    run_dir = make_run_dir("consolidation_enrichment" + ("_quick" if args.quick else ""))
     tasks = [(m, s) for m in args.methods for s in args.seeds]
     print(f"{len(tasks)} runs on {args.device} with {args.jobs} in parallel -> {run_dir}")
     runs, t0 = [], time.perf_counter()
@@ -273,15 +274,15 @@ def main() -> int:
     runs.sort(key=lambda r: (METHODS.index(r["config"]), r["seed"]))
     with open(run_dir / "runs.pkl", "wb") as f:
         pickle.dump(runs, f)
-    base = load_step4()
+    base = load_reproduction()
     if args.quick:
-        tables, figure = run_dir / "tables", run_dir / "step4b_consolidation_fix_quick.png"
+        tables, figure = run_dir / "tables", run_dir / "consolidation_enrichment_quick.png"
     else:
-        tables, figure = Path("results/tables"), Path("results/figures/step4b_consolidation_fix.png")
+        tables, figure = Path("results/tables"), Path("results/figures/consolidation_enrichment.png")
     write_tables(runs, base, tables)
     make_figure(runs, base, figure)
     save_json({"args": vars(args), "env": env_info()}, run_dir / "metrics.json")
-    print("\n" + (tables / "step4b_consolidation_fix_summary.md").read_text(encoding="utf-8"))
+    print("\n" + (tables / "consolidation_enrichment_summary.md").read_text(encoding="utf-8"))
     print(f"figure: {figure}\ntables: {tables}\nraw runs: {run_dir}")
     return 0
 

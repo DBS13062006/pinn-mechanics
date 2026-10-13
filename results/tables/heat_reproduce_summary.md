@@ -1,4 +1,4 @@
-# Step 5: steady heat conduction (paper section 4.2)
+# Steady heat conduction: reproduction (paper section 4.2)
 
 Errors against the exact series solution. Median over 5 seeds (worst in brackets).
 The paper's Fig. 3 shows a maximum error of about 5.2e-03, on the edges.

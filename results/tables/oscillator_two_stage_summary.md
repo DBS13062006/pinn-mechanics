@@ -1,7 +1,7 @@
-# Step 3b: fixing slow discovery of c (oscillator, paper section 4.3)
+# Damped oscillator: fixing slow discovery of c (paper section 4.3)
 
 Truth: c = 0.4, k = 4. Start: c = 0.2, k = 2. A run succeeds if both end within 1%.
-The paper row is Step 3's 5 runs with the paper's exact settings.
+The paper row is the reproduction's 5 runs with the paper's exact settings.
 
 | method | succeeded | c error (median / worst) | k error (median / worst) | time per run (mean) |
 |---|---|---|---|---|

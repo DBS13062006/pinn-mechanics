@@ -29,4 +29,4 @@ desktop.ini
 .env
 
 # Console logs of long experiment runs
-step*_log.txt
+*_log*.txt

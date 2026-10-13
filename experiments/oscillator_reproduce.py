@@ -1,5 +1,5 @@
 """
-Step 3: reproduce paper section 4.3 (find damping c and stiffness k), with
+Reproduce paper section 4.3 (find damping c and stiffness k), with
 5 random seeds instead of the paper's single run, and find out WHY c
 converges so slowly.
 
@@ -9,16 +9,16 @@ Configurations (all share the paper's network, data and starting guesses):
   adam20k_lbfgs  Adam for 20k iterations, then L-BFGS until it converges
 
 Usage (from the repo root):
-  python experiments/step3_oscillator.py --bench          # time CPU vs GPU, then choose
-  python experiments/step3_oscillator.py --device cuda    # all configs, seeds 0-4, one at a time
-  python experiments/step3_oscillator.py --device cpu --jobs 5   # 5 runs in parallel on CPU cores
-  python experiments/step3_oscillator.py --quick          # 1-minute smoke test
+  python experiments/oscillator_reproduce.py --bench          # time CPU vs GPU, then choose
+  python experiments/oscillator_reproduce.py --device cuda    # all configs, seeds 0-4, one at a time
+  python experiments/oscillator_reproduce.py --device cpu --jobs 5   # 5 runs in parallel on CPU cores
+  python experiments/oscillator_reproduce.py --quick          # 1-minute smoke test
 
 Outputs:
-  results/figures/step3_oscillator.png        report figure            (committed)
-  results/tables/step3_oscillator_runs.csv    one row per run          (committed)
-  results/tables/step3_oscillator_summary.md  one row per config       (committed)
-  results/runs/<timestamp>_step3_oscillator/  full trajectories        (not committed)
+  results/figures/oscillator_reproduce.png        report figure            (committed)
+  results/tables/oscillator_reproduce_runs.csv    one row per run          (committed)
+  results/tables/oscillator_reproduce_summary.md  one row per config       (committed)
+  results/runs/<timestamp>_oscillator_reproduce/  full trajectories        (not committed)
 """
 from __future__ import annotations
 
@@ -201,7 +201,7 @@ def write_tables(runs: list[dict], tables: Path) -> list[dict]:
     tables.mkdir(parents=True, exist_ok=True)
     cols = ["config", "seed", "c", "k", "c_err", "k_err", "success", "u_rel_l2", "ode_test",
             "data_loss", "iters_total", "iters_to_1pct", "lbfgs_iters", "seconds", "device"]
-    with open(tables / "step3_oscillator_runs.csv", "w", newline="", encoding="utf-8") as f:
+    with open(tables / "oscillator_reproduce_runs.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols)
         w.writeheader()
         for r in runs:
@@ -224,7 +224,7 @@ def write_tables(runs: list[dict], tables: Path) -> list[dict]:
             "seconds_mean": statistics.mean(r["seconds"] for r in rs),
         })
 
-    lines = ["# Step 3: damped oscillator (paper section 4.3)", "",
+    lines = ["# Damped oscillator: reproduction (paper section 4.3)", "",
              "Truth: c = 0.4, k = 4. Start: c = 0.2, k = 2. A run succeeds if both end within 1%.",
              "Paper's single run: c = 0.40125 (0.31% off), k = 3.9933 (0.17% off).", "",
              "| configuration | succeeded | c error (median / worst) | k error (median / worst) "
@@ -236,7 +236,7 @@ def write_tables(runs: list[dict], tables: Path) -> list[dict]:
                      f"| {s['c_err_median']:.1e} / {s['c_err_worst']:.1e} "
                      f"| {s['k_err_median']:.1e} / {s['k_err_worst']:.1e} | {it} "
                      f"| {s['seconds_mean']:.0f} s |")
-    (tables / "step3_oscillator_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (tables / "oscillator_reproduce_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return summary
 
 
@@ -320,7 +320,7 @@ def make_figure(runs: list[dict], path: Path) -> None:
         ax.set(title=f"({'e' if name == 'c' else 'f'}) Final error of {name}, every seed "
                      "(hollow = failed)", ylabel=f"|{name} - true| / true")
 
-    fig.suptitle("Step 3: damped oscillator, find c and k (paper section 4.3)",
+    fig.suptitle("Damped oscillator: find c and k (paper section 4.3)",
                  x=0.01, ha="left", fontweight="bold")
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=150)
@@ -329,7 +329,7 @@ def make_figure(runs: list[dict], path: Path) -> None:
 
 # ---------------------------------------------------------------- main
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Step 3: damped oscillator inverse problem")
+    parser = argparse.ArgumentParser(description="Damped oscillator inverse problem: reproduction")
     parser.add_argument("--configs", nargs="+", default=list(CONFIGS), choices=list(CONFIGS))
     parser.add_argument("--seeds", nargs="+", type=int, default=[0, 1, 2, 3, 4])
     parser.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
@@ -344,7 +344,7 @@ def main() -> int:
     if args.quick:
         args.seeds = args.seeds[:2]
 
-    run_dir = make_run_dir("step3_oscillator" + ("_quick" if args.quick else ""))
+    run_dir = make_run_dir("oscillator_reproduce" + ("_quick" if args.quick else ""))
     tasks = [(c, s) for c in args.configs for s in args.seeds]
     print(f"{len(tasks)} runs on {args.device} with {args.jobs} in parallel -> {run_dir}")
 
@@ -365,15 +365,15 @@ def main() -> int:
         pickle.dump(runs, f)
 
     if args.quick:
-        tables, figure = run_dir / "tables", run_dir / "step3_oscillator_quick.png"
+        tables, figure = run_dir / "tables", run_dir / "oscillator_reproduce_quick.png"
     else:
-        tables, figure = Path("results/tables"), Path("results/figures/step3_oscillator.png")
+        tables, figure = Path("results/tables"), Path("results/figures/oscillator_reproduce.png")
     summary = write_tables(runs, tables)
     if any(r["config"] == "paper" for r in runs):
         make_figure(runs, figure)
     save_json({"args": vars(args), "env": env_info(), "summary": summary}, run_dir / "metrics.json")
 
-    print("\n" + (tables / "step3_oscillator_summary.md").read_text(encoding="utf-8"))
+    print("\n" + (tables / "oscillator_reproduce_summary.md").read_text(encoding="utf-8"))
     print(f"figure: {figure}\ntables: {tables}\nraw runs: {run_dir}")
     return 0
 

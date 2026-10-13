@@ -25,7 +25,7 @@ suggests (but does not try) multiplying the network by a distance-like
 function that vanishes on the boundary; temperature_hard() below does exactly
 that with d = (1 - x^2)(1 - y^2).
 
-The corners (Step 5b). Along an edge T = 0, so T does not curve along it:
+The corners. Along an edge T = 0, so T does not curve along it:
 on the top edge T_xx = 0, and on the right edge T_yy = 0, so the PDE forces
 T_xx = -1 there. At the corner where the two edges meet, T_xx would have to
 be 0 and -1 at once. The exact solution resolves this by making T_xx depend on
@@ -106,7 +106,7 @@ def temperature_hard(model, x, y):
     return distance(x, y) * model(x, y)
 
 
-# ------------------------------------------------------------ corners (Step 5b)
+# ------------------------------------------------------------ corners
 CORNERS = ((1, 1), (-1, 1), (1, -1), (-1, -1))
 CORNER_RADIUS = 0.5             # width of the Gaussian fade-out around each corner term
 
@@ -148,7 +148,7 @@ def corner_terms(x, y, radius: float = CORNER_RADIUS):
     edges, so T = 0 still holds exactly on every edge. The Gaussian fade-out
     keeps each term near its corner; without it the four terms add up to more
     than the temperature itself and the network has to learn a large
-    correction (tried in Step 5b: about 10x worse).
+    correction (tried in heat_corners.py: about 10x worse).
     """
     lib = torch if isinstance(x, torch.Tensor) else np
     out = 0.0
@@ -160,7 +160,7 @@ def corner_terms(x, y, radius: float = CORNER_RADIUS):
 
 
 def temperature_corner(model, x, y):
-    """Step 5b: T = d * network + corner terms. T = 0 on the edges exactly, and
+    """Corner-enriched output: T = d * network + corner terms. T = 0 on the edges exactly, and
     the corner behaviour no smooth network can produce is built in."""
     return temperature_hard(model, x, y) + corner_terms(x, y)
 

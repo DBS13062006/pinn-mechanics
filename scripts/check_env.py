@@ -1,5 +1,5 @@
 """
-Step 1 environment check. Run from the repo root:
+Environment check. Run from the repo root:
 
     python scripts/check_env.py
 
@@ -24,7 +24,7 @@ PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
 
 
 # --------------------------------------------------------------------------
-# Two tiny helpers. Proper versions live in pinn/ from Step 2 onwards.
+# Two tiny helpers. Proper versions live in pinn/.
 # --------------------------------------------------------------------------
 def d(outputs: torch.Tensor, inputs: torch.Tensor) -> torch.Tensor:
     """Derivative of a point-wise function with respect to its inputs.

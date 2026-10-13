@@ -1,4 +1,4 @@
-# Step 4: 1D consolidation (paper section 4.1)
+# 1D consolidation: reproduction (paper section 4.1)
 
 Errors against the exact solution. Median over seeds (worst in brackets).
 The paper reports a 'perfect match' with max absolute error about 0.045 (its Fig. 2).

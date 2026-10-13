@@ -1,5 +1,5 @@
 """
-Step 8a: how well can c and k be found from imperfect data, and how does the
+How well can c and k be found from imperfect data, and how does the
 PINN compare with simpler methods? The paper only tried clean data at 50
 points and compared against nothing.
 
@@ -16,8 +16,8 @@ Methods (all start from c = 0.2, k = 2 and know the ODE, m, u(0), u'(0)):
   plain NN       fit a network to the data alone, then read c and k off its
                  derivatives (stages 1-2 of the two-stage PINN, recorded from
                  the same runs, so no extra training)
-  standard PINN  Adam 20k + L-BFGS on the full PINN loss (best of Step 3)
-  two-stage PINN the fix from Step 3b
+  standard PINN  Adam 20k + L-BFGS on the full PINN loss (best of the reproduction)
+  two-stage PINN the fix from oscillator_two_stage.py
 
 Reference: the Cramer-Rao bound, the smallest spread ANY unbiased method can
 achieve with this much noise (problems/oscillator.py: cramer_rao_std). With
@@ -26,8 +26,8 @@ misses c by about 1.3% half the time. So errors are also reported as a
 multiple of what an ideal method would typically get.
 
 Usage (from the repo root):
-  python experiments/step8_oscillator_noise.py --device cpu --jobs 3
-  python experiments/step8_oscillator_noise.py --quick
+  python experiments/oscillator_noise.py --device cpu --jobs 3
+  python experiments/oscillator_noise.py --quick
 """
 from __future__ import annotations
 
@@ -45,8 +45,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-# Shared settings from Step 3b (same folder, so a plain import works).
-import step3b_oscillator_fix as s3b
+# Shared settings from the two-stage script (same folder, so a plain import works).
+import oscillator_two_stage as s3b
 from pinn import (MLP, TrainConfig, Trainer, env_info, make_run_dir,
                   relative_l2, save_json, set_seed, setup_torch)
 from pinn.plotting import INK_2, MUTED, SERIES, apply_style
@@ -55,7 +55,7 @@ from problems import oscillator as osc
 TRAINED = ["standard_pinn", "two_stage", "classical"]          # what actually runs (slowest first)
 METHODS = ["classical", "plain_nn", "standard_pinn", "two_stage"]  # what is reported
 LABELS = {"classical": "classical (ODE least squares)", "plain_nn": "plain NN + regression",
-          "standard_pinn": "standard PINN (Adam 20k + L-BFGS)", "two_stage": "two-stage PINN (Step 3b)"}
+          "standard_pinn": "standard PINN (Adam 20k + L-BFGS)", "two_stage": "two-stage PINN"}
 SHORT = {"classical": "classical", "plain_nn": "plain NN", "standard_pinn": "standard PINN",
          "two_stage": "two-stage PINN"}
 COLORS = {"classical": INK_2, "plain_nn": SERIES[2], "standard_pinn": SERIES[1], "two_stage": SERIES[0]}
@@ -128,7 +128,7 @@ def run_one(method: str, setting: str, noise: float, draw: int, device_name: str
         Trainer(net + [c, k], loss_full, cfg(1_000 if quick else 20_000, lbfgs_max)).train()
         return [row("standard_pinn", c.item(), k.item(), time.perf_counter() - t0, u_error())]
 
-    # two-stage (Step 3b), stage 1: data + initial condition only
+    # two-stage, stage 1: data + initial condition only
     Trainer(net, loss_data_only, cfg(1_000 if quick else s3b.STAGE1_ADAM, lbfgs_max)).train()
     seconds_nn = time.perf_counter() - t0
     # stage 2: c and k implied by the fitted curve, over the measured window only
@@ -163,7 +163,7 @@ def groups(runs):
 
 def write_tables(runs: list[dict], tables: Path, quick: bool) -> None:
     tables.mkdir(parents=True, exist_ok=True)
-    with open(tables / "step8_oscillator_noise_runs.csv", "w", newline="", encoding="utf-8") as f:
+    with open(tables / "oscillator_noise_runs.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=COLS, extrasaction="ignore")
         w.writeheader()
         for r in runs:
@@ -171,7 +171,7 @@ def write_tables(runs: list[dict], tables: Path, quick: bool) -> None:
     g = groups(runs)
     n_draws = max(len(v) for v in g.values())
     med = lambda rs, key: statistics.median(r[key] for r in rs)
-    lines = ["# Step 8a: finding c and k from noisy and sparse data", "",
+    lines = ["# Damped oscillator: finding c and k from noisy and sparse data", "",
              f"Truth c = 0.4, k = 4; every method starts from c = 0.2, k = 2. Median relative error over "
              f"{n_draws} noise draws, worst in brackets." + (" QUICK TEST RUN: not results." if quick else ""),
              "Noise: standard deviation as a fraction of the initial displacement.",
@@ -211,7 +211,7 @@ def write_tables(runs: list[dict], tables: Path, quick: bool) -> None:
               f"started from the initial guess instead: {len(fb)} of "
               f"{sum(r['method'] == 'two_stage' for r in runs)}.",
               "The plain NN's time is its share of the two-stage run (stage 1 only)."]
-    (tables / "step8_oscillator_noise_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (tables / "oscillator_noise_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def make_figure(runs: list[dict], path: Path) -> None:
@@ -253,7 +253,7 @@ def make_figure(runs: list[dict], path: Path) -> None:
     axes[1, 0].annotate(f"dots = draws, line = median; dashed = typical error of an ideal method; "
                         f"errors below {ERR_FLOOR:.0e} drawn at {ERR_FLOOR:.0e}",
                         xy=(0.01, 0.01), xycoords="axes fraction", fontsize=7, color=INK_2)
-    fig.suptitle("Step 8a: finding c and k from noisy and sparse data", x=0.01, ha="left", fontweight="bold")
+    fig.suptitle("Damped oscillator: finding c and k from noisy and sparse data", x=0.01, ha="left", fontweight="bold")
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=150)
     plt.close(fig)
@@ -261,7 +261,7 @@ def make_figure(runs: list[dict], path: Path) -> None:
 
 # ---------------------------------------------------------------- main
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Step 8a: noisy and sparse data (oscillator)")
+    parser = argparse.ArgumentParser(description="Damped oscillator: noisy and sparse data")
     parser.add_argument("--methods", nargs="+", default=TRAINED, choices=TRAINED)
     parser.add_argument("--settings", nargs="+", default=list(osc.DATA_SETTINGS), choices=list(osc.DATA_SETTINGS))
     parser.add_argument("--noise", nargs="+", type=float, default=list(osc.NOISE_LEVELS))
@@ -274,8 +274,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.quick:
         args.draws = args.draws[:2]
-    run_dir = Path(args.resume) if args.resume else make_run_dir("step8_oscillator_noise" + ("_quick" if args.quick else ""))
-    partial = run_dir / "partial"            # every finished task is saved at once (see Step 5)
+    run_dir = Path(args.resume) if args.resume else make_run_dir("oscillator_noise" + ("_quick" if args.quick else ""))
+    partial = run_dir / "partial"            # every finished task is saved at once (see heat_reproduce.py)
     partial.mkdir(parents=True, exist_ok=True)
 
     def fname(m, s, n, d):
@@ -314,13 +314,13 @@ def main() -> int:
     with open(run_dir / "runs.pkl", "wb") as f:
         pickle.dump(runs, f)
     if args.quick:
-        tables, figure = run_dir / "tables", run_dir / "step8_oscillator_noise_quick.png"
+        tables, figure = run_dir / "tables", run_dir / "oscillator_noise_quick.png"
     else:
-        tables, figure = Path("results/tables"), Path("results/figures/step8_oscillator_noise.png")
+        tables, figure = Path("results/tables"), Path("results/figures/oscillator_noise.png")
     write_tables(runs, tables, args.quick)
     make_figure(runs, figure)
     save_json({"args": vars(args), "env": env_info()}, run_dir / "metrics.json")
-    print("\n" + (tables / "step8_oscillator_noise_summary.md").read_text(encoding="utf-8"))
+    print("\n" + (tables / "oscillator_noise_summary.md").read_text(encoding="utf-8"))
     print(f"figure: {figure}\ntables: {tables}\nraw runs: {run_dir}")
     return 0
 

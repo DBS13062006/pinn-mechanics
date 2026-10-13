@@ -1,6 +1,6 @@
-# Step 4b: fixing the consolidation error near the corner (paper section 4.1)
+# 1D consolidation: fixing the error near the corner (paper section 4.1)
 
-Median over 5 seeds (worst in brackets). Paper and baseline rows are Step 4's runs.
+Median over 5 seeds (worst in brackets). Paper and baseline rows are the reproduction's runs.
 
 | method | rel. L2 error | max error, t >= 0.01 | max error, t >= 0.05 | highest predicted pressure (must be <= 1) | collocation points in t < 0.01 | PDE loss on fresh points | time per run |
 |---|---|---|---|---|---|---|---|

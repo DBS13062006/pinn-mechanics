@@ -1,12 +1,12 @@
 """
 pinn: the reusable PINN engine for this project.
 
-  utils.py        reproducibility, device/precision, timing, bookkeeping (Step 1-2)
-  model.py        fully connected network with input scaling           (Step 2)
-  derivatives.py  autograd helpers: grad, nth_grad, laplacian          (Step 2)
-  metrics.py      relative L2, max error, parameter error              (Step 2)
-  train.py        Adam -> L-BFGS trainer with per-term logging         (Step 2)
-  sampling.py     residual-based adaptive sampling (RAD) hook         (Step 4b)
+  utils.py        reproducibility, device/precision, timing, bookkeeping
+  model.py        fully connected network with input scaling
+  derivatives.py  autograd helpers: grad, nth_grad, laplacian
+  metrics.py      relative L2, max error, parameter error
+  train.py        Adam -> L-BFGS trainer with per-term logging
+  sampling.py     residual-based adaptive sampling (RAD) hook
 """
 from pinn.derivatives import grad, laplacian, nth_grad
 from pinn.metrics import max_abs_error, relative_error, relative_l2

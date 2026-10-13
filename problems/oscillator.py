@@ -118,7 +118,7 @@ def implied_parameters(model, t: torch.Tensor, m: float = M) -> tuple[float, flo
 WINDOWS = ((0.0, 5.0), (5.0, 10.0), (10.0, 15.0))
 
 
-# ---------------------------------------------------------------- Step 8: imperfect data
+# ---------------------------------------------------------------- imperfect data
 # Noise standard deviation as a fraction of the initial displacement u0 = 1.
 # For scale: the true oscillation has decayed to exp(-c T_MAX / 2m) = 5% of its
 # starting size by t = 15, so 3-10% noise buries the late tail, which is where
@@ -166,7 +166,7 @@ def classical_fit(t, u, c0: float = C_START, k0: float = K_START) -> dict:
     initial conditions and the data; it does not use the closed-form solution.
 
     Also returns the textbook standard errors, sigma^2 (J^T J)^-1, with sigma
-    estimated from the leftover misfit (used for uncertainty in Step 8b).
+    estimated from the leftover misfit (for uncertainty estimates).
     """
     from scipy.optimize import least_squares
     t = np.asarray(t, float).ravel()

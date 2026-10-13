@@ -61,7 +61,7 @@ def test_boundary_points_lie_on_the_edges_and_cover_all_four():
         assert mask.sum() > 300
 
 
-# ---------------------------------------------------------------- corners (Step 5b)
+# ---------------------------------------------------------------- corners
 def test_exact_curvature_at_a_corner_depends_on_direction_not_distance():
     """Approaching corner (1, 1) at angle theta from the top edge, T_xx -> -2 theta / pi:
     0 along the top edge, -1 along the right edge. No smooth function can do this."""
