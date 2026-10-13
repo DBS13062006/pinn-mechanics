@@ -1,5 +1,5 @@
 """
-Step 5: reproduce paper section 4.2 (steady heat conduction with a uniform
+Reproduce paper section 4.2 (steady heat conduction with a uniform
 source on a square) with 5 seeds, and test the fix the paper suggests but
 never implements: enforce T = 0 on the edges exactly by multiplying the
 network by a function that vanishes there.
@@ -15,10 +15,10 @@ Reference: the exact series solution (problems/heat.py), checked against our
 own finite-difference solver. The paper says no analytical solution exists.
 
 Usage (from the repo root):
-  python experiments/step5_heat.py --bench
-  python experiments/step5_heat.py --device cpu --jobs 5
-  python experiments/step5_heat.py --device cuda
-  python experiments/step5_heat.py --quick
+  python experiments/heat_reproduce.py --bench
+  python experiments/heat_reproduce.py --device cpu --jobs 5
+  python experiments/heat_reproduce.py --device cuda
+  python experiments/heat_reproduce.py --quick
 """
 from __future__ import annotations
 
@@ -176,14 +176,14 @@ COLS = ["config", "seed", "rel_l2", "max_err", "max_err_edge", "max_err_band", "
 
 def write_tables(runs: list[dict], tables: Path) -> None:
     tables.mkdir(parents=True, exist_ok=True)
-    with open(tables / "step5_heat_runs.csv", "w", newline="", encoding="utf-8") as f:
+    with open(tables / "heat_reproduce_runs.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=COLS, extrasaction="ignore")
         w.writeheader()
         for r in runs:
             w.writerow(r)
     med = lambda rs, k: statistics.median(r[k] for r in rs)
     worst = lambda rs, k: max(r[k] for r in rs)
-    lines = ["# Step 5: steady heat conduction (paper section 4.2)", "",
+    lines = ["# Steady heat conduction: reproduction (paper section 4.2)", "",
              "Errors against the exact series solution. Median over 5 seeds (worst in brackets).",
              f"The paper's Fig. 3 shows a maximum error of about {PAPER_MAX_ERR:.1e}, on the edges.", "",
              "| configuration | rel. L2 error | max error | max error on the edges | max error, interior "
@@ -209,7 +209,7 @@ def write_tables(runs: list[dict], tables: Path) -> None:
         lines += ["", "Hard BC, PDE loss on fresh points near the four corners (within 0.1 of both edges) vs "
                   f"elsewhere: {med(hard, 'test_pde_loss_corners'):.1e} vs {med(hard, 'test_pde_loss_rest'):.1e} "
                   "(median)."]
-    (tables / "step5_heat_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (tables / "heat_reproduce_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def strip(ax, groups, key, log=True):
@@ -276,7 +276,7 @@ def make_figure(runs: list[dict], path: Path) -> None:
     axes[1, 2].axhline(0.0, color=INK_2, lw=0.9, ls=":")
     axes[1, 2].set_title("(f) Lowest predicted temperature (physics: >= 0)")
 
-    fig.suptitle("Step 5: steady heat conduction (paper section 4.2)", x=0.01, ha="left", fontweight="bold")
+    fig.suptitle("Steady heat conduction: reproduction (paper section 4.2)", x=0.01, ha="left", fontweight="bold")
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=150)
     plt.close(fig)
@@ -284,7 +284,7 @@ def make_figure(runs: list[dict], path: Path) -> None:
 
 # ---------------------------------------------------------------- main
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Step 5: steady heat conduction")
+    parser = argparse.ArgumentParser(description="Steady heat conduction: reproduction")
     parser.add_argument("--configs", nargs="+", default=list(CONFIGS), choices=list(CONFIGS))
     parser.add_argument("--seeds", nargs="+", type=int, default=[0, 1, 2, 3, 4])
     parser.add_argument("--device", default="cpu", choices=["cuda", "cpu"])
@@ -299,7 +299,7 @@ def main() -> int:
         return 0
     if args.quick:
         args.seeds = args.seeds[:2]
-    run_dir = Path(args.resume) if args.resume else make_run_dir("step5_heat" + ("_quick" if args.quick else ""))
+    run_dir = Path(args.resume) if args.resume else make_run_dir("heat_reproduce" + ("_quick" if args.quick else ""))
     # Every finished training is saved here immediately, so an interrupted run loses
     # only the trainings still in progress. --resume RUN_DIR picks up from these files.
     partial = run_dir / "partial"
@@ -330,13 +330,13 @@ def main() -> int:
     with open(run_dir / "runs.pkl", "wb") as f:
         pickle.dump(runs, f)
     if args.quick:
-        tables, figure = run_dir / "tables", run_dir / "step5_heat_quick.png"
+        tables, figure = run_dir / "tables", run_dir / "heat_reproduce_quick.png"
     else:
-        tables, figure = Path("results/tables"), Path("results/figures/step5_heat.png")
+        tables, figure = Path("results/tables"), Path("results/figures/heat_reproduce.png")
     write_tables(runs, tables)
     make_figure(runs, figure)
     save_json({"args": vars(args), "env": env_info()}, run_dir / "metrics.json")
-    print("\n" + (tables / "step5_heat_summary.md").read_text(encoding="utf-8"))
+    print("\n" + (tables / "heat_reproduce_summary.md").read_text(encoding="utf-8"))
     print(f"figure: {figure}\ntables: {tables}\nraw runs: {run_dir}")
     return 0
 

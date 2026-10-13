@@ -84,7 +84,7 @@ def test_overdamped_parameters_are_rejected():
         osc.exact(np.array([0.0]), c=10.0, k=4.0)
 
 
-# ---------------------------------------------------------------- Step 8: imperfect data
+# ---------------------------------------------------------------- imperfect data
 def test_noisy_observations_layout_and_reproducibility():
     for setting, (n, t_end) in osc.DATA_SETTINGS.items():
         t, u = osc.noisy_observations(setting, 0.0, draw=3)

@@ -61,7 +61,7 @@ def setup_torch(dtype: torch.dtype = torch.float64, prefer: str = "cuda") -> tor
     Every experiment calls this first. After it, every new network and tensor
     is float64 unless stated otherwise.
 
-    Why float64: the step 1 benchmark on the RTX 4050 measured 12.6 ms per
+    Why float64: the environment-check benchmark on the RTX 4050 measured 12.6 ms per
     training step in float32 and 12.2 ms in float64. With networks this small
     the GPU spends its time launching many tiny operations, not on arithmetic,
     so the slower float64 arithmetic is hidden. Extra precision is therefore

@@ -1,5 +1,5 @@
 """
-Step 4: reproduce paper section 4.1 (Terzaghi consolidation, a forward
+Reproduce paper section 4.1 (Terzaghi consolidation, a forward
 problem) with 5 seeds, and measure WHERE the error is.
 
 Configurations (the paper's network, points and loss weights in both):
@@ -16,10 +16,10 @@ Diagnostics, all against the exact (method-of-images) solution:
   * training PDE loss vs the same loss on 20,000 fresh random points.
 
 Usage (from the repo root):
-  python experiments/step4_consolidation.py --bench
-  python experiments/step4_consolidation.py --device cpu --jobs 5
-  python experiments/step4_consolidation.py --device cuda
-  python experiments/step4_consolidation.py --quick
+  python experiments/consolidation_reproduce.py --bench
+  python experiments/consolidation_reproduce.py --device cpu --jobs 5
+  python experiments/consolidation_reproduce.py --device cuda
+  python experiments/consolidation_reproduce.py --quick
 """
 from __future__ import annotations
 
@@ -207,14 +207,14 @@ def write_tables(runs: list[dict], tables: Path) -> None:
             "err_share_t_lt_0.01", "err_share_t_lt_0.05", "coll_points_t_lt_0.01",
             "coll_points_corner", "train_pde_loss", "test_pde_loss", "train_ic_loss",
             "train_bc_loss", "p_min", "p_max", "iters_total", "lbfgs_iters", "seconds", "device"]
-    with open(tables / "step4_consolidation_runs.csv", "w", newline="", encoding="utf-8") as f:
+    with open(tables / "consolidation_reproduce_runs.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
         for r in runs:
             w.writerow(r)
 
     med = lambda rs, k: statistics.median(r[k] for r in rs)
-    lines = ["# Step 4: 1D consolidation (paper section 4.1)", "",
+    lines = ["# 1D consolidation: reproduction (paper section 4.1)", "",
              "Errors against the exact solution. Median over seeds (worst in brackets).",
              "The paper reports a 'perfect match' with max absolute error about 0.045 (its Fig. 2).", "",
              "| configuration | runs | rel. L2 error | max error, t >= 0.01 | max error, t >= 0.05 "
@@ -234,7 +234,7 @@ def write_tables(runs: list[dict], tables: Path) -> None:
             f"| {med(rs, 'coll_points_t_lt_0.01'):.0f} of 500 "
             f"| {med(rs, 'train_pde_loss'):.1e} / {med(rs, 'test_pde_loss'):.1e} "
             f"| {statistics.mean(r['seconds'] for r in rs):.0f} s |")
-    (tables / "step4_consolidation_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (tables / "consolidation_reproduce_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def make_figure(runs: list[dict], path: Path) -> None:
@@ -324,7 +324,7 @@ def make_figure(runs: list[dict], path: Path) -> None:
     ax.set(title="(f) The error sits where the points are not", ylabel="fraction (median over runs)")
     ax.legend(loc="upper left", fontsize=8)
 
-    fig.suptitle("Step 4: 1D consolidation (paper section 4.1)", x=0.01, ha="left", fontweight="bold")
+    fig.suptitle("1D consolidation: reproduction (paper section 4.1)", x=0.01, ha="left", fontweight="bold")
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=150)
     plt.close(fig)
@@ -332,7 +332,7 @@ def make_figure(runs: list[dict], path: Path) -> None:
 
 # ---------------------------------------------------------------- main
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Step 4: 1D consolidation")
+    parser = argparse.ArgumentParser(description="1D consolidation: reproduction")
     parser.add_argument("--configs", nargs="+", default=list(CONFIGS), choices=list(CONFIGS))
     parser.add_argument("--seeds", nargs="+", type=int, default=[0, 1, 2, 3, 4])
     parser.add_argument("--device", default="cpu", choices=["cuda", "cpu"])
@@ -346,7 +346,7 @@ def main() -> int:
     if args.quick:
         args.seeds = args.seeds[:2]
 
-    run_dir = make_run_dir("step4_consolidation" + ("_quick" if args.quick else ""))
+    run_dir = make_run_dir("consolidation_reproduce" + ("_quick" if args.quick else ""))
     # Longest runs first, so parallel workers finish at about the same time.
     tasks = sorted([(c, s) for c in args.configs for s in args.seeds],
                    key=lambda cs: -CONFIGS[cs[0]]["adam_iters"])
@@ -365,13 +365,13 @@ def main() -> int:
     with open(run_dir / "runs.pkl", "wb") as f:
         pickle.dump(runs, f)
     if args.quick:
-        tables, figure = run_dir / "tables", run_dir / "step4_consolidation_quick.png"
+        tables, figure = run_dir / "tables", run_dir / "consolidation_reproduce_quick.png"
     else:
-        tables, figure = Path("results/tables"), Path("results/figures/step4_consolidation.png")
+        tables, figure = Path("results/tables"), Path("results/figures/consolidation_reproduce.png")
     write_tables(runs, tables)
     make_figure(runs, figure)
     save_json({"args": vars(args), "env": env_info()}, run_dir / "metrics.json")
-    print("\n" + (tables / "step4_consolidation_summary.md").read_text(encoding="utf-8"))
+    print("\n" + (tables / "consolidation_reproduce_summary.md").read_text(encoding="utf-8"))
     print(f"figure: {figure}\ntables: {tables}\nraw runs (incl. trained weights): {run_dir}")
     return 0
 
