@@ -116,7 +116,7 @@ p_t = p_{xx},\quad 0<x<1,\; 0<t\le 0.5;\qquad p(0,t)=0,\quad p_x(1,t)=0,\quad p(
 **Fix: corner-enriched output.**
 
 ```math
-p(x,t) \;=\; \operatorname{erf}\!\left(\frac{x}{2\sqrt{t}}\right) \;+\; x\,t\,N(x,t)
+p(x,t) \;=\; \mathrm{erf}\!\left(\frac{x}{2\sqrt{t}}\right) \;+\; x\,t\,N(x,t)
 ```
 
 The erf term is the exact solution for a layer with no base and carries the jump. The network learns only the smooth correction. We compare it with residual-based adaptive sampling (RAD), the "adaptive re-meshing" that the paper lists as future work.
