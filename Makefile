@@ -2,6 +2,7 @@
 # Works on macOS and Linux. On Windows, run the commands shown below directly.
 
 PY ?= python
+VENV_PY ?= python3.12
 JOBS ?= 5
 
 .PHONY: help setup check test demo demo-quick reproduce fixes poromechanics figures writeup clean
@@ -20,7 +21,7 @@ help:
 	@echo "Set JOBS=N to change how many runs train in parallel (default $(JOBS))."
 
 setup:
-	$(PY) -m venv .venv
+	$(VENV_PY) -m venv .venv
 	.venv/bin/pip install --upgrade pip
 	.venv/bin/pip install torch
 	.venv/bin/pip install -r requirements.txt

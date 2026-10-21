@@ -236,13 +236,15 @@ Everything the paper specifies is implemented as stated: network sizes, activati
 ```bash
 git clone https://github.com/DBS13062006/pinn-mechanics.git
 cd pinn-mechanics
-python3 -m venv .venv && source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate   # Mac: brew install python@3.12 first
 pip install torch                       # on a Mac this is the native Apple Silicon build
 pip install -r requirements.txt         # also installs this repo in editable mode
 python scripts/check_env.py             # autograd, seeding and speed checks
 python -m pytest                        # 57 tests, under a minute
 python demo.py                          # live demo, about a minute per problem
 ```
+
+> **Use Python 3.10–3.13 (3.12 recommended).** PyTorch publishes builds only for released Python versions it supports; on a newer Python, `pip install torch` fails with "No matching distribution found". `python --version` inside the activated environment shows which one you have.
 
 With `make`: `make setup`, then `source .venv/bin/activate`, then `make test` and `make demo`. Run `make help` for every shortcut.
 
