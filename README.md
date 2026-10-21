@@ -73,6 +73,7 @@ In an *inverse* problem, unknown physical constants are trained alongside the we
 | **Soil consolidation** (4.1) | Relative L2 error 1.4e-2; pressure overshoots to 1.11 | Corner-enriched output | **6.4e-5 (about 200x lower); no overshoot** |
 | **Heat conduction** (4.2) | Max error 3.8e-3, on the edges | Exact boundary condition + exact corner terms | **2.7e-5 (about 140x lower)** |
 | **Noisy, sparse data** (new) | Not tested | Benchmark vs classical fit and Cramer-Rao bound | **Classical fit wins; PINNs need dense data** |
+| **Coupled poromechanics** (§5, future work) | Paper's recipe on the coupled system: pore-pressure error 2.1e-1; *c* found in 1/5 seeds | Corner-enriched displacement and pressure | **2.2e-4 (about 1,000x lower); *c* found in 5/5 seeds** |
 
 All numbers are medians over seeds.
 
@@ -200,13 +201,47 @@ With a known ODE and two parameters, the classical fit is the right tool. The tw
 
 Code: [`oscillator_noise.py`](experiments/oscillator_noise.py) · Table: [summary](results/tables/oscillator_noise_summary.md)
 
+## 5. Coupled poromechanics: the paper's future work
+
+The paper ends by proposing to try the coupled poromechanics equations (its Eqs. 5.1–5.2). We solve them in 1D: a soil column loaded on top, drained at the top, resting on a rigid impermeable base. **One network with two outputs**, the soil displacement $U$ and the pore pressure $P$, is trained on the coupled equations exactly as written:
+
+```math
+\beta P_t - P_{xx} + \gamma\,U_{xt} = 0 \quad\text{(5.1, fluid mass)},\qquad U_{xx} - \alpha P_x = 0 \quad\text{(5.2, equilibrium)}
+```
+
+with $P = 0$ and the load $U_x - \alpha P = -1$ on the drained top, and $U = 0$ and $P_x = 0$ on the base. Here $\alpha = 0.9$ is the Biot coefficient, and $\beta$ and $\gamma$ follow from the soil's stiffness and the fluid's compressibility.
+
+**Exact solution.** Integrating (5.2) gives $U_x = \alpha P - 1$; substituting into (5.1) reduces it to the section 4.1 equation scaled by the loading efficiency $\gamma$. The displacement then has a closed form in iterated error functions, which we derived and cross-checked against a Fourier series. The PINN never sees this reduction.
+
+**Two problems**, matching the paper's two classes:
+
+- **Forward:** find $U$ and $P$ everywhere.
+- **Inverse:** find the consolidation coefficient $c$, which sets how fast the soil settles and gives its permeability, from 20 readings of the surface settlement. These are what a geotechnical engineer measures with a settlement plate. The truth is $c = 0.5$; training starts from 0.1.
+
+| Method (5 seeds) | Pore-pressure error, rel. L2 | Displacement error, rel. L2 | Highest pressure (physics: ≤ 0.638) | *c* within 1%, clean readings |
+|:--|:-:|:-:|:-:|:-:|
+| Paper's recipe ($U = (1-x)N_u$, $P = xN_p$) | 2.1e-1 | 1.2e-1 | 0.674 | 1/5 |
+| **Corner-enriched $U$ and $P$ (ours)** | **2.2e-4** | **8.8e-5** | **0.638** | **5/5** (median error 6e-5) |
+
+The same corner that limits section 4.1 limits the coupled problem: the load makes the pressure jump at the drained top, and the displacement's slope jumps with it. Building the erf front into $P$, and the displacement it produces into $U$, lowers the error about 1,000-fold.
+
+**With 1% reading noise**, the enriched PINN finds $c$ within 1% in 3/5 draws (median error 9.3e-3). The classical curve fit, which knows the closed-form settlement curve, gets 9.2e-3 on the same readings, and the two agree within about 0.001 on every draw. The remaining error is set by the noise in the readings, not by the method. The PINN reaches that limit without a closed form, which is what it would need for layered soil or 2D and 3D problems, where none exists.
+
+<details>
+<summary><b>Full figure</b>: settlement curves, pressure and displacement profiles, c during training</summary>
+<br>
+<img src="results/figures/poromechanics.png" alt="Poromechanics results" width="100%">
+</details>
+
+Code: [`problems/poromechanics.py`](problems/poromechanics.py), [`experiments/poromechanics.py`](experiments/poromechanics.py) · Table: [summary](results/tables/poromechanics_summary.md)
+
 ---
 
 ## Conclusions
 
 1. **One run is not evidence.** The paper's results hold for only some seeds.
 2. **Training loss can mislead.** Near corners the loss looked converged while the equation was badly violated. Residuals on fresh points exposed it every time.
-3. **Put known structure in the output, not the loss.** Exact boundary conditions and analytical enrichment beat adaptive sampling and longer training.
+3. **Put known structure in the output, not the loss.** Exact boundary conditions and analytical enrichment beat adaptive sampling and longer training, and the same idea solved the paper's future-work problem.
 4. **Warm starts make inverse problems reliable.** The two-stage method went from 3/5 to 10/10 seeds, at 30x the speed.
 5. **A PINN is not always the right tool.** It earns its place when data are incomplete and physics must fill the gaps.
 
@@ -308,10 +343,10 @@ Each script writes its figure to `results/figures/`, its tables to `results/tabl
 | Consolidation: enrichment vs RAD | `python experiments/consolidation_enrichment.py --device cpu --jobs 5` | 15 | 13 min |
 | Heat: reproduction | `python experiments/heat_reproduce.py --device cpu --jobs 3` | 15 | 82 min |
 | Heat: corners | `python experiments/heat_corners.py --device cpu --jobs 3` | 15 | 50 min |
-| Coupled poromechanics (§5) | `python experiments/poromechanics.py --jobs 5` | 25 | POROTIME |
+| Coupled poromechanics (§5) | `python experiments/poromechanics.py --jobs 5` | 25 | 11 min† |
 | Summary figure | `python report/make_summary_figure.py` | 0 | 1 s |
 
-<sub>*Wall time on an Intel i5-13450HX laptop CPU (poromechanics: POROMACHINE). An Apple M5 is comparable or faster; use `--jobs` up to its number of performance cores.</sub>
+<sub>*Wall time on an Intel i5-13450HX laptop CPU. †Apple M5 MacBook Air, `--jobs 6`.</sub>
 
 **Options.**
 
