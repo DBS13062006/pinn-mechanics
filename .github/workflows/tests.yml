@@ -1,0 +1,40 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]   # macos-latest is Apple Silicon (arm64)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install PyTorch (CPU)
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            pip install torch --index-url https://download.pytorch.org/whl/cpu
+          else
+            pip install torch
+          fi
+
+      - name: Install the project
+        run: pip install -r requirements.txt
+
+      - name: Unit tests
+        run: python -m pytest -q
+
+      - name: Demo smoke test (oscillator, half budget)
+        run: python demo.py oscillator --quick --no-show
