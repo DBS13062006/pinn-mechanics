@@ -21,10 +21,10 @@
 
 % ---- poromechanics results (results/tables/poromechanics_summary.md) ----
 \newcommand{\poroPaperP}{2.1e-1}     % rel. L2 error of P, paper recipe (median)
-\newcommand{\poroOursP}{1.3e-3}      % rel. L2 error of P, enriched (median)
-\newcommand{\poroInvPaper}{0/5}      % inverse, paper recipe: seeds within 1%
-\newcommand{\poroInvOurs}{5/5}       % inverse, enriched, 1% noise: seeds within 1%
-\newcommand{\poroInvErr}{1e-3}       % median error in c, enriched, 1% noise
+\newcommand{\poroOursP}{2.2e-4}      % rel. L2 error of P, enriched (median)
+\newcommand{\poroInvPaper}{1/5}      % inverse, paper recipe: seeds within 1%
+\newcommand{\poroInvOurs}{5/5}       % inverse, enriched, clean: seeds within 1%
+\newcommand{\poroInvErr}{6e-5}       % median error in c, enriched, clean
 
 \begin{document}
 
@@ -109,8 +109,8 @@ Problem & Paper's method, reproduced (median over seeds) & Our fix & Gain \\
 4.3 Oscillator ($c$, $k$) & 3/5 seeds within 1\,\%, 699\,s per run & two-stage: \textbf{10/10 seeds}, 23\,s & reliable, 30$\times$ faster \\
 4.1 Consolidation & rel.\ L2 error 1.4e-2, pressure overshoots to 1.11 & enriched: \textbf{6.4e-5}, no overshoot & $\approx$200$\times$ lower \\
 4.2 Heat & max error 3.8e-3 (on the edges) & exact BC + corners: \textbf{2.7e-5} & $\approx$140$\times$ lower \\
-5 Poromechanics, forward & rel.\ L2 error of $P$: \poroPaperP & enriched: \textbf{\poroOursP} & coupled $U,P$ solved \\
-5 Poromechanics, inverse & \poroInvPaper\ seeds find $c$ within 1\,\% & \textbf{\poroInvOurs}, median error \poroInvErr\ with 1\,\% noise & $c$ discovered \\
+5 Poromechanics, forward & rel.\ L2 error of $P$: \poroPaperP, overshoots & enriched: \textbf{\poroOursP}, no overshoot & $\approx$1000$\times$ lower \\
+5 Poromechanics, inverse & \poroInvPaper\ seeds find $c$ within 1\,\% & \textbf{\poroInvOurs}, median error \poroInvErr; with 1\,\% noise equal to a classical fit & reliable \\
 \bottomrule
 \end{tabularx}
 \end{center}
