@@ -68,6 +68,12 @@ def check_environment() -> tuple[dict, str]:
         print(f"  {key:<20} {value}")
     if info["cuda_available"]:
         return info, PASS
+    import platform
+    if platform.system() == "Darwin" and platform.machine() == "arm64":
+        print("\n  Apple Silicon Mac: running on the CPU, as intended. The Apple GPU")
+        print("  backend (mps) has no float64, which L-BFGS needs; the CPU cores are")
+        print("  fast enough for these small networks (the demo takes about a minute).")
+        return info, PASS
     print("\n  No usable GPU found. Everything still runs on the CPU, just slower.")
     print("  On Windows the usual cause is a CPU-only PyTorch build: reinstall")
     print("  with the CUDA command from https://pytorch.org/get-started/locally/")

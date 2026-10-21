@@ -6,13 +6,14 @@
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-49%20passing-2EA44F)
+![Tests](https://img.shields.io/badge/tests-57%20passing-2EA44F)
+![macOS](https://img.shields.io/badge/Apple%20Silicon-supported-000000?logo=apple&logoColor=white)
 ![Seeds](https://img.shields.io/badge/every%20result-5%E2%80%9310%20seeds-6E56CF)
 
 **Daruru Bhuvan Sai** (PES1UG24AM356) · **Vismay H S** (PES1UG24AM325)
 UE24CS352A Machine Learning · PES University
 
-[**Report (PDF)**](report/PINN_Mechanics_Report.pdf) · [Results](#results-at-a-glance) · [Quick start](#quick-start) · [Reproduce](#reproducing-every-result) · [Code structure](#repository-structure)
+[**Write-up (2 pages)**](report/writeup/writeup.pdf) · [**Full report (PDF)**](report/PINN_Mechanics_Report.pdf) · [Results](#results-at-a-glance) · [Quick start](#quick-start) · [**Live demo**](#live-demo) · [Reproduce](#reproducing-every-result) · [Code structure](#repository-structure)
 
 <br>
 
@@ -23,10 +24,12 @@ UE24CS352A Machine Learning · PES University
 ## Highlights
 
 - **Reproduced all three experiments** of the base paper over 5–10 random seeds each, against exact solutions.
+- **Implemented the paper's future work** (§5): one PINN for the coupled poromechanics equations, as a forward problem and as discovery of the consolidation coefficient from settlement readings.
 - **Found the cause of each remaining error.** It is a slow-to-learn tail, a corner where the solution jumps, and corners where no smooth network can satisfy the physics.
 - **Fixed every one.** The fixes give 10/10 reliable parameter discovery at 30x the speed, about 200x lower error in consolidation, and about 140x lower worst-case error in heat conduction.
 - **Tested what the paper didn't:** noisy and sparse data, against a classical fit and the theoretical best (the Cramer-Rao bound).
-- **Fully reproducible.** There are 49 unit tests, seeded runs that are bit-identical on the same machine, and one script per result.
+- **Fully reproducible.** There are 57 unit tests run in CI on Linux and Apple Silicon, seeded runs that are bit-identical on the same machine, and one script per result.
+- **Live demo.** `python demo.py` replays the paper's method against our fix on all four problems, about a minute each on a laptop.
 
 ## Contents
 
@@ -36,12 +39,15 @@ UE24CS352A Machine Learning · PES University
 4. [Consolidation: the error at the corner](#2-consolidation-the-error-at-the-corner)
 5. [Heat conduction: edges, then corners](#3-heat-conduction-edges-then-corners)
 6. [Noisy and sparse data](#4-noisy-and-sparse-data)
-7. [Conclusions](#conclusions)
-8. [Quick start](#quick-start)
-9. [Reproducing every result](#reproducing-every-result)
-10. [Repository structure](#repository-structure)
-11. [Design decisions](#design-decisions)
-12. [References](#references)
+7. [Coupled poromechanics: the paper's future work](#5-coupled-poromechanics-the-papers-future-work)
+8. [Conclusions](#conclusions)
+9. [Deviations from the paper](#deviations-from-the-paper)
+10. [Quick start](#quick-start)
+11. [Live demo](#live-demo)
+12. [Reproducing every result](#reproducing-every-result)
+13. [Repository structure](#repository-structure)
+14. [Design decisions](#design-decisions)
+15. [References](#references)
 
 ## Background
 
@@ -206,28 +212,54 @@ Code: [`oscillator_noise.py`](experiments/oscillator_noise.py) · Table: [summar
 
 **Limitations.** The enrichment terms need analytical insight into each problem. Uncertainty estimates for *c* and *k* are future work. All timings come from one laptop CPU.
 
+## Deviations from the paper
+
+Everything the paper specifies is implemented as stated: network sizes, activations, initialisers, point counts, loss weights, learning rates and optimiser schedules (checked line by line in each `experiments/*_reproduce.py`). Where the paper is silent or we chose differently, it is listed here.
+
+| Where | Paper | This repository | Why |
+|:--|:--|:--|:--|
+| Framework | DeepXDE (TensorFlow); no code released | Own PyTorch engine (`pinn/`), float64 | Full control over every loss term; L-BFGS needs float64 |
+| Runs | One run per problem | 5–10 seeds per configuration | A single run cannot show reliability |
+| 4.1 boundary points | 250 on the $x$-boundary | All 250 on $x = 1$ | $p = 0$ at $x = 0$ already holds exactly through the paper's own $x \cdot N$ output |
+| 4.1 loss | One boundary loss over BC and IC points, $w_b = 1/4$ | BC and IC terms weighted $\tfrac14\cdot\tfrac{250}{375}$ and $\tfrac14\cdot\tfrac{125}{375}$ | Identical to one average over all 375 points, but each term is logged separately |
+| 4.1, 4.2 test sets | 10,011 / 10,000 points | 201 × 201 grid (40,401 points) + 20,000 fresh residual points | Denser; the fresh-point residual exposed errors the training loss hid |
+| 4.1, 4.2 output range | Outputs "enforced" to [0, 1] and > 0 (mechanism not described) | No clipping; violations reported (pressure up to 1.108, temperature down to −0.004) | Clipping would hide the error we diagnose |
+| 4.2 reference | deal.II finite elements | Classical series solution, checked against our finite-difference solver | Exact, so errors are measured exactly |
+| 4.3 time window, start values | Not stated | $t \in [0, 15]$; $c_0 = 0.2$, $k_0 = 2$ | Read off the paper's Fig. 4 |
+| 4.3 boundary set | "50 random points" | The initial condition evaluated once at $t = 0$ | For an ODE all 50 points would be the same point |
+| §5 poromechanics | 3D equations only, as future work | 1D oedometer form; body force dropped; our own network size and budget | The 1D case has an exact solution to measure against; $\rho_b g$ only sets the initial geostatic state |
+
 ## Quick start
+
+**macOS (Apple Silicon, M1–M5)** and **Linux**:
 
 ```bash
 git clone https://github.com/DBS13062006/pinn-mechanics.git
 cd pinn-mechanics
-python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
-# Install PyTorch with the command for your system from https://pytorch.org/get-started/locally/
-pip install -r requirements.txt                       # also installs this repo in editable mode
-python -m pytest                                      # 49 tests, under a minute
-python experiments/oscillator_two_stage.py --quick --device cpu   # about a minute
+python3 -m venv .venv && source .venv/bin/activate
+pip install torch                       # on a Mac this is the native Apple Silicon build
+pip install -r requirements.txt         # also installs this repo in editable mode
+python scripts/check_env.py             # autograd, seeding and speed checks
+python -m pytest                        # 57 tests, under a minute
+python demo.py                          # live demo, about a minute per problem
 ```
 
+With `make`: `make setup`, then `source .venv/bin/activate`, then `make test` and `make demo`. Run `make help` for every shortcut.
+
+> **Why the CPU on a Mac?** Every run trains in float64, because L-BFGS needs the precision near convergence. Apple's GPU backend (`mps`) has no float64, so the code uses the CPU, and passing `--device mps` falls back to it with a note. These networks are small enough that the M-series CPU is fast. For the multi-seed studies, `--jobs N` trains N runs in parallel, one per core.
+
 <details>
-<summary><b>Other setups</b>: conda and Google Colab</summary>
+<summary><b>Other setups</b>: Windows, conda and Google Colab</summary>
+
+**Windows.** Use `.venv\Scripts\activate`. A plain `pip install torch` gives a CPU-only build; for an NVIDIA GPU, install PyTorch with the CUDA command from [pytorch.org](https://pytorch.org/get-started/locally/).
 
 **Conda**
 
 ```bash
 conda create -n pinn python=3.12 -y && conda activate pinn
-# Install PyTorch from https://pytorch.org/get-started/locally/
+pip install torch            # or the CUDA command from pytorch.org
 pip install -r requirements.txt
-python scripts/check_env.py      # checks the GPU, autograd and seeding
+python scripts/check_env.py
 ```
 
 **Google Colab.** Choose a GPU runtime. The repository is private, so store a GitHub fine-grained token with read access as `GH_TOKEN` in Colab's Secrets panel:
@@ -239,9 +271,27 @@ token = userdata.get("GH_TOKEN")
 %cd pinn-mechanics
 !pip install -q -r requirements.txt
 ```
-
-On Windows, a plain `pip install torch` gives a CPU-only build, so install PyTorch with the CUDA command from pytorch.org.
 </details>
+
+## Live demo
+
+```bash
+python demo.py                    # all four problems, one after another
+python demo.py oscillator         # or: consolidation | heat | poromechanics
+python demo.py --quick            # half the training budget, for a tight time slot
+python demo.py all --no-show      # save figures to results/demo/ without opening windows
+```
+
+Each problem trains two PINNs from scratch on the same small budget, the paper's method and our fix, and prints every loss term as it trains. It then opens a figure comparing both with the exact solution and prints a verdict such as `relative L2 error: paper method 1.6e-02 -> our fix 2.1e-04 (76x better)`.
+
+| Demo | What the audience sees |
+|:--|:--|
+| `oscillator` | The paper's joint training still has the wrong damping $c$; the two-stage warm start reads $c, k$ off a data fit and lands on 0.4 and 4. |
+| `consolidation` | Pressure profiles near the drained top: the paper's network overshoots 1 and lags the front; the erf-enriched output follows it. |
+| `heat` | Error maps on one colour scale: the paper's error lines the edges; ours is near zero everywhere. |
+| `poromechanics` | Twenty noisy settlement readings; the enriched coupled PINN recovers the consolidation coefficient $c = 0.5$ from a start of 0.1. |
+
+The demo budgets are far smaller than in `experiments/`, so its numbers vary a little between machines. The multi-seed results above come from the experiment scripts.
 
 ## Reproducing every result
 
@@ -256,13 +306,14 @@ Each script writes its figure to `results/figures/`, its tables to `results/tabl
 | Consolidation: enrichment vs RAD | `python experiments/consolidation_enrichment.py --device cpu --jobs 5` | 15 | 13 min |
 | Heat: reproduction | `python experiments/heat_reproduce.py --device cpu --jobs 3` | 15 | 82 min |
 | Heat: corners | `python experiments/heat_corners.py --device cpu --jobs 3` | 15 | 50 min |
+| Coupled poromechanics (§5) | `python experiments/poromechanics.py --jobs 5` | 25 | POROTIME |
 | Summary figure | `python report/make_summary_figure.py` | 0 | 1 s |
 
-<sub>*Wall time on an Intel i5-13450HX laptop CPU.</sub>
+<sub>*Wall time on an Intel i5-13450HX laptop CPU (poromechanics: POROMACHINE). An Apple M5 is comparable or faster; use `--jobs` up to its number of performance cores.</sub>
 
 **Options.**
 
-- Every script accepts `--device cpu|cuda`, `--jobs N` and `--quick` (a small smoke test).
+- Every script accepts `--device cpu|cuda`, `--jobs N` and `--quick` (a small smoke test). `make reproduce`, `make fixes` and `make poromechanics` run them in order.
 - The reproduction scripts accept `--bench`, which times CPU against GPU.
 - The heat and noise studies accept `--resume <run folder>` to continue after an interruption.
 - Runs are seeded and record library versions and hardware, so reruns on the same machine are bit-identical.
@@ -282,16 +333,21 @@ pinn-mechanics/
 ├── problems/                     one module per physics problem
 │   ├── oscillator.py             exact solution, implied parameters, noisy data, Cramer-Rao bound
 │   ├── consolidation.py          Fourier and erfc exact solutions, enriched output
-│   └── heat.py                   series solution, finite differences, exact-BC and corner outputs
+│   ├── heat.py                   series solution, finite differences, exact-BC and corner outputs
+│   └── poromechanics.py          coupled Biot equations (5.1)-(5.2), exact U and P, enriched outputs
 ├── experiments/                  one script per study (see the table above)
 ├── results/
 │   ├── figures/                  one figure per study, plus summary.png
 │   └── tables/                   per-run CSV and summary table per study
-├── tests/                        49 unit tests: engine, exact solutions, corner facts
-├── scripts/check_env.py          GPU, autograd and seeding check
+├── tests/                        57 unit tests: engine, exact solutions, corner facts
+├── scripts/check_env.py          autograd, seeding, speed and hardware check
+├── demo.py                       live demo: paper method vs our fix, ~1 min per problem
 ├── report/
+│   ├── writeup/writeup.pdf       2-page write-up (LaTeX source alongside)
 │   ├── PINN_Mechanics_Report.pdf full project report
 │   └── make_summary_figure.py    draws results/figures/summary.png from the tables
+├── .github/workflows/tests.yml   CI: tests + demo smoke test on Linux and Apple Silicon
+├── Makefile                      make setup | test | demo | reproduce | fixes | writeup
 ├── pyproject.toml
 └── requirements.txt
 ```

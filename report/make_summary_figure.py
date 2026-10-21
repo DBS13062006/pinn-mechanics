@@ -27,7 +27,7 @@ OTHERS = ["#c9c8c1", "#a3a29a"]   # paper, alternative: quiet neutrals so the fi
 
 def rows(table: str, config: str) -> list[dict]:
     with open(TABLES / f"{table}_runs.csv", newline="", encoding="utf-8") as f:
-        return [r for r in csv.DictReader(f) if r["config"] == config]
+        return [r for r in csv.DictReader(f) if r.get("config", r.get("task")) == config]
 
 
 def values(table: str, config: str, key: str) -> list[float]:
@@ -57,7 +57,9 @@ def error_panel(ax, groups, ylabel, title):
 
 def main() -> None:
     apply_style()
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4.2), gridspec_kw={"wspace": 0.32})
+    poro = (TABLES / "poromechanics_runs.csv").exists()
+    n = 4 if poro else 3
+    fig, axes = plt.subplots(1, n, figsize=(4.35 * n, 4.2), gridspec_kw={"wspace": 0.32})
 
     # (a) oscillator: how often c and k are found, and at what cost
     ax = axes[0]
@@ -97,12 +99,19 @@ def main() -> None:
         ("exact BC +\ncorner terms (ours)", values("heat_corners", "corner5k", "max_err"), OURS),
     ], "max error over the plate", "(c) Heat conduction: worst-case error")
 
+    # (d) coupled poromechanics (paper section 5): pore pressure from the coupled U-P system
+    if poro:
+        error_panel(axes[3], [
+            ("paper's recipe\n(coupled U, P)", values("poromechanics", "fwd_paper", "rel_l2_P"), OTHERS[0]),
+            ("corner-enriched\nU and P (ours)", values("poromechanics", "fwd_enriched", "rel_l2_P"), OURS),
+        ], "relative L2 error of pore pressure", "(d) Coupled poromechanics (paper \u00a75)")
+
     for ax in axes:
         ax.tick_params(axis="x", length=0)
         ax.spines["bottom"].set_color(AXIS)
     fig.text(0.01, 0.02, "Bars: median over seeds (5 or 10). Dots: individual seeds. "
              "All errors against exact solutions.", fontsize=8, color=MUTED)
-    fig.subplots_adjust(left=0.05, right=0.99, top=0.9, bottom=0.2)
+    fig.subplots_adjust(left=0.04 if poro else 0.05, right=0.99, top=0.9, bottom=0.2)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=170)
     print(f"figure: {OUT}")

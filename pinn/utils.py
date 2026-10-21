@@ -49,9 +49,18 @@ def set_seed(seed: int, deterministic: bool = False) -> None:
 # Device, precision and timing
 # --------------------------------------------------------------------------
 def get_device(prefer: str = "cuda") -> torch.device:
-    """Return the GPU if one is usable, otherwise the CPU."""
-    if prefer == "cuda" and torch.cuda.is_available():
+    """Return the GPU if one is usable, otherwise the CPU.
+
+    Apple Silicon (M1-M5): the Apple GPU backend ("mps") has no float64
+    support, and this project trains in float64 (see setup_torch). Asking
+    for "mps" therefore falls back to the CPU with a note. That costs little:
+    these networks are tiny, and the M-series CPU cores are fast enough that
+    every demo finishes in about a minute.
+    """
+    if prefer in ("cuda", "auto") and torch.cuda.is_available():
         return torch.device("cuda")
+    if prefer == "mps":
+        print("note: the Apple GPU (mps) does not support float64; using the CPU instead.")
     return torch.device("cpu")
 
 
@@ -99,6 +108,26 @@ def timer(device: torch.device | str | None = None):
 # --------------------------------------------------------------------------
 # Bookkeeping
 # --------------------------------------------------------------------------
+def _cpu_name() -> str:
+    """Human-readable CPU name, e.g. 'Apple M5' or 'Intel(R) Core(TM) i7-...'."""
+    if platform.system() == "Darwin":
+        import subprocess
+        try:
+            return subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
+                                  capture_output=True, text=True, timeout=2).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            pass
+    if platform.system() == "Linux":
+        try:
+            with open("/proc/cpuinfo", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        return line.split(":", 1)[1].strip()
+        except OSError:
+            pass
+    return platform.processor() or platform.machine()
+
+
 def env_info() -> dict:
     """Library versions and hardware, saved alongside every result."""
     info = {
@@ -107,6 +136,8 @@ def env_info() -> dict:
         "torch": torch.__version__,
         "numpy": np.__version__,
         "cuda_available": torch.cuda.is_available(),
+        "cpu": _cpu_name(),
+        "cpu_cores": os.cpu_count(),
     }
     if torch.cuda.is_available():
         props = torch.cuda.get_device_properties(0)
