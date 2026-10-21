@@ -11,7 +11,7 @@ solution (also saved to results/demo/). The budgets here are much smaller
 than in experiments/ so that the demo runs live in front of an audience; the
 full multi-seed numbers are in results/tables/.
 
-Typical times on an Apple M5 (CPU): about 1 minute per problem.
+Typical time for all four problems: a few minutes on an Apple M-series laptop (CPU).
 """
 from __future__ import annotations
 

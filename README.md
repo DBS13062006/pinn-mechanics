@@ -29,7 +29,7 @@ UE24CS352A Machine Learning · PES University
 - **Fixed every one.** The fixes give 10/10 reliable parameter discovery at 30x the speed, about 200x lower error in consolidation, and about 140x lower worst-case error in heat conduction.
 - **Tested what the paper didn't:** noisy and sparse data, against a classical fit and the theoretical best (the Cramer-Rao bound).
 - **Fully reproducible.** There are 57 unit tests run in CI on Linux and Apple Silicon, seeded runs that are bit-identical on the same machine, and one script per result.
-- **Live demo.** `python demo.py` replays the paper's method against our fix on all four problems, about a minute each on a laptop.
+- **Live demo.** `python demo.py` replays the paper's method against our fix on all four problems in a few minutes on a laptop.
 
 ## Contents
 
@@ -276,7 +276,7 @@ pip install torch                       # on a Mac this is the native Apple Sili
 pip install -r requirements.txt         # also installs this repo in editable mode
 python scripts/check_env.py             # autograd, seeding and speed checks
 python -m pytest                        # 57 tests, under a minute
-python demo.py                          # live demo, about a minute per problem
+python demo.py                          # live demo, a few minutes for all four problems
 ```
 
 > **Use Python 3.10–3.13 (3.12 recommended).** PyTorch publishes builds only for released Python versions it supports; on a newer Python, `pip install torch` fails with "No matching distribution found". `python --version` inside the activated environment shows which one you have.
@@ -319,13 +319,13 @@ python demo.py --quick            # half the training budget, for a tight time s
 python demo.py all --no-show      # save figures to results/demo/ without opening windows
 ```
 
-Each problem trains two PINNs from scratch on the same small budget, the paper's method and our fix, and prints every loss term as it trains. It then opens a figure comparing both with the exact solution and prints a verdict such as `relative L2 error: paper method 1.6e-02 -> our fix 2.1e-04 (76x better)`.
+Each problem trains two PINNs from scratch on the same small budget, the paper's method and our fix, and prints every loss term as it trains. It then opens a figure comparing both with the exact solution and prints a verdict such as `relative L2 error: paper method 2.55e-02 -> our fix 4.68e-05 (546x better)`.
 
 | Demo | What the audience sees |
 |:--|:--|
 | `oscillator` | The paper's joint training still has the wrong damping $c$; the two-stage warm start reads $c, k$ off a data fit and lands on 0.4 and 4. |
 | `consolidation` | Pressure profiles near the drained top: the paper's network overshoots 1 and lags the front; the erf-enriched output follows it. |
-| `heat` | Error maps on one colour scale: the paper's error lines the edges; ours is near zero everywhere. |
+| `heat` | Error maps on one colour scale: the paper's error sits at the corners and along the edges; ours is invisible on the same scale. |
 | `poromechanics` | Twenty noisy settlement readings; the enriched coupled PINN recovers the consolidation coefficient $c = 0.5$ from a start of 0.1. |
 
 The demo budgets are far smaller than in `experiments/`, so its numbers vary a little between machines. The multi-seed results above come from the experiment scripts.
@@ -378,7 +378,7 @@ pinn-mechanics/
 │   └── tables/                   per-run CSV and summary table per study
 ├── tests/                        57 unit tests: engine, exact solutions, corner facts
 ├── scripts/check_env.py          autograd, seeding, speed and hardware check
-├── demo.py                       live demo: paper method vs our fix, ~1 min per problem
+├── demo.py                       live demo: paper method vs our fix on all four problems
 ├── report/
 │   ├── writeup/writeup.pdf       2-page write-up (LaTeX source alongside)
 │   ├── PINN_Mechanics_Report.pdf full project report
